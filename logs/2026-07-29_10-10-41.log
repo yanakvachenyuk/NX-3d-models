@@ -1,0 +1,1430 @@
+================================================================================
+Дата
+================================================================================
+2026-07-29 10:10:41.079434
+
+================================================================================
+Запрос пользователя
+================================================================================
+нарисуй треугольную пластину размерами сторон 30 40 50 и толщиной 3 и отверстием радиусом 5
+
+================================================================================
+Определенная деталь
+================================================================================
+Пластина
+
+================================================================================
+Полный промпт
+================================================================================
+
+Ты являешься генератором Python-кода для Siemens NX.
+
+Твоя задача — написать готовый Python-файл.
+
+ДОСТУПНЫЕ КЛАССЫ (используй ТОЛЬКО их):
+- Line - для создания линий
+- Circle - для создания окружностей  
+- Rectangle - для создания прямоугольников
+- Square - для создания квадратов
+- EquilateralTriangle - для создания равносторонних треугольников
+- Trapezoid - для создания трапеций
+- Extrude - для вытягивания профилей
+- Hide - для скрытия геометрии
+
+НЕ ИСПОЛЬЗУЙ другие классы!
+
+Для построения необходимо использовать библиотеку nx_primitives.
+
+Использовать NXOpen напрямую разрешается только для получения Session и WorkPart.
+
+Далее использовать только классы библиотеки nx_primitives из списка выше.
+
+Ты получаешь:
+
+1. Общие правила.
+2. Описание детали.
+3. Информацию о библиотеке nx_primitives (код всех файлов).
+4. Запрос пользователя.
+
+СТРОГИЕ ПРАВИЛА:
+
+1. Используй ТОЛЬКО классы из списка выше.
+2. НЕ придумывай новые классы.
+3. НЕ придумывай новые функции.
+4. НЕ создавай функции-обертки.
+5. НЕ создавай вспомогательные функции.
+6. НЕ изменяй интерфейс существующих классов.
+7. Весь код должен быть написан ВНЕ функций и классов.
+8. Используй только прямое создание объектов классов.
+9. ВСЕГДА импортируй ВСЕ классы, которые используешь.
+
+ВАЖНО: В начале файла обязательно добавь:
+
+import sys
+import os
+
+project_path = r'<ПУТЬ_К_ПРОЕКТУ>'
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
+
+import NXOpen
+from nx_primitives import Circle, Extrude, Hide  # и другие нужные классы
+
+Запрещено:
+
+- Markdown
+- ```python
+- пояснения
+- комментарии вне кода
+- любой текст до или после кода
+- создание функций
+- создание классов
+- использование классов не из списка
+
+Ответ должен быть готовым исполняемым Python-файлом.
+
+============================================================
+
+ОБЩИЕ ПРАВИЛА
+
+============================================================
+
+Все детали строятся при помощи библиотеки nx_primitives.
+
+Доступные классы библиотеки nx_primitives:
+- Profile (базовый класс)
+- Line (линия)
+- Circle (окружность)
+- Rectangle (прямоугольник)
+- Square (квадрат)
+- EquilateralTriangle (равносторонний треугольник)
+- Trapezoid (трапеция)
+- Extrude (вытягивание)
+- Hide (скрытие)
+
+Правила:
+
+1. Использовать только классы библиотеки nx_primitives из списка выше.
+
+2. Не использовать NXOpen API напрямую, кроме получения Session и WorkPart.
+
+3. Все размеры задаются пользователем.
+
+4. Все профили должны быть полностью замкнуты.
+
+5. Все отверстия являются объектами Circle.
+
+6. Все отверстия должны располагаться внутри внешнего профиля.
+
+7. Все профили передаются в одну операцию Extrude.
+
+8. Создавать только одно тело.
+
+9. После построения необходимо скрыть все двумерные профили при помощи Hide.
+
+10. Не использовать булевы операции.
+
+11. Не использовать операции вырезания.
+
+12. Не создавать дополнительные Extrude.
+
+13. Использовать только классы, которые существуют в библиотеке nx_primitives.
+
+14. Если необходимого класса нет в библиотеке, не придумывать его.
+
+15. НЕ создавать функции и классы. Весь код пишется глобально.
+
+16. НЕ использовать функции-обертки. Создавать объекты классов напрямую.
+
+17. В начале файла обязательно импортировать ВСЕ используемые классы:
+    from nx_primitives import Circle, Extrude, Hide  # и другие нужные классы
+
+18. Не использовать Rectangle если нужен Circle и наоборот.
+
+19. Для круга всегда использовать класс Circle, а не Rectangle.
+
+20. Импортировать все классы, которые используются в коде.
+
+============================================================
+
+ТИП ДЕТАЛИ
+
+============================================================
+
+Пластина
+
+============================================================
+
+ОПИСАНИЕ
+
+============================================================
+
+
+Пластина представляет собой тело постоянной толщины.
+
+Алгоритм построения:
+
+1.
+Создать один внешний замкнутый профиль.
+
+Допустимые профили:
+
+- Rectangle
+- Square
+- Circle
+- EquilateralTriangle
+- Trapezoid
+
+2.
+Если имеются отверстия,
+каждое отверстие создать отдельным объектом Circle.
+
+Все отверстия должны быть переданы вместе с внешним профилем
+в одну операцию Extrude.
+
+Не создавать отдельные операции вырезания.
+
+3.
+Выполнить один Extrude.
+
+Толщина задается пользователем.
+
+4.
+После Extrude скрыть все использованные профили
+с помощью Hide.
+
+
+============================================================
+
+ОГРАНИЧЕНИЯ
+
+============================================================
+
+- использовать только библиотеку nx_primitives
+- не использовать NXOpen напрямую, кроме получения Session и WorkPart
+- использовать только один Extrude
+- не создавать дополнительные тела
+- не выполнять булевы операции
+- не использовать операции вырезания
+- после построения скрыть все профили
+
+
+============================================================
+
+ИНФОРМАЦИЯ О БИБЛИОТЕКЕ nx_primitives
+
+============================================================
+
+
+================================================================================
+__init__.py
+================================================================================
+
+from .base import Profile
+from .curves import Line, Circle
+from .shapes import (
+    Rectangle, 
+    Square, 
+    EquilateralTriangle,
+    TriangleBy3Sides,
+    TriangleBy2SidesAndAngle,
+    TriangleBy2AnglesAndSide,
+    IsoscelesTriangleBySides,
+    IsoscelesTriangleByAngleAndSide,
+    IsoscelesTriangleBySideAndAngle,
+    RightTriangle,
+    Trapezoid
+)
+from .solid import Extrude
+from .display import Hide
+
+__all__ = [
+    'Profile',
+    'Line',
+    'Circle',
+    'Rectangle',
+    'Square',
+    'EquilateralTriangle',
+    'TriangleBy3Sides',
+    'TriangleBy2SidesAndAngle',
+    'TriangleBy2AnglesAndSide',
+    'IsoscelesTriangleBySides',
+    'IsoscelesTriangleByAngleAndSide',
+    'IsoscelesTriangleBySideAndAngle',
+    'RightTriangle',
+    'Trapezoid',
+    'Extrude',
+    'Hide'
+]
+
+
+================================================================================
+base.py
+================================================================================
+
+from __future__ import annotations
+
+from typing import Iterator
+
+import NXOpen
+
+
+class Profile:
+    """
+    Базовый класс всех двумерных профилей.
+    """
+
+    def __init__(self, curves: list[NXOpen.Curve]):
+
+        self.curves = curves
+
+    def __iter__(self) -> Iterator[NXOpen.Curve]:
+        return iter(self.curves)
+
+    def __len__(self) -> int:
+        return len(self.curves)
+
+    def __getitem__(self, index):
+        return self.curves[index]
+
+
+================================================================================
+geometry.py
+================================================================================
+
+from math import sqrt, cos, sin, radians
+from typing import Tuple
+
+Point = Tuple[float, float, float]
+
+
+def rectangle_points(
+    width: float,
+    height: float,
+    center=(0.0, 0.0)
+) -> tuple[Point, Point, Point, Point]:
+    cx, cy = center
+    x1 = cx - width / 2
+    x2 = cx + width / 2
+    y1 = cy - height / 2
+    y2 = cy + height / 2
+    return (
+        (x1, y1, 0.0),
+        (x2, y1, 0.0),
+        (x2, y2, 0.0),
+        (x1, y2, 0.0)
+    )
+
+
+def equilateral_triangle_points(
+    side: float,
+    center=(0.0, 0.0)
+) -> tuple[Point, Point, Point]:
+    cx, cy = center
+    h = side * sqrt(3) / 2
+    return (
+        (cx - side / 2, cy - h / 3, 0.0),
+        (cx + side / 2, cy - h / 3, 0.0),
+        (cx, cy + 2 * h / 3, 0.0)
+    )
+
+
+def triangle_by_3_sides(
+    side_a: float,
+    side_b: float,
+    side_c: float,
+    center=(0.0, 0.0)
+) -> tuple[Point, Point, Point]:
+    """Создает треугольник по трем сторонам"""
+    # Проверка существования треугольника
+    if (side_a + side_b <= side_c) or (side_a + side_c <= side_b) or (side_b + side_c <= side_a):
+        raise ValueError("Треугольник с такими сторонами не существует")
+    
+    cx, cy = center
+    
+    # Первая вершина в центре внизу
+    p1 = (cx - side_a / 2, cy - side_b / 2, 0.0)
+    
+    # Вторая вершина
+    p2 = (cx + side_a / 2, cy - side_b / 2, 0.0)
+    
+    # Третья вершина вычисляется по теореме косинусов
+    # Угол при вершине p1 между сторонами side_a и side_b
+    cos_angle = (side_a**2 + side_b**2 - side_c**2) / (2 * side_a * side_b)
+    angle = cos_angle if -1 <= cos_angle <= 1 else 0
+    
+    # Высота треугольника
+    h = side_a * sqrt(1 - cos_angle**2) if 0 <= cos_angle <= 1 else side_b
+    
+    # Смещение третьей вершины
+    dx = side_a * cos_angle
+    dy = side_a * sqrt(1 - cos_angle**2)
+    
+    p3 = (cx + dx - side_a / 2, cy + dy - side_b / 2, 0.0)
+    
+    return (p1, p2, p3)
+
+
+def triangle_by_2_sides_and_angle(
+    side_a: float,
+    side_b: float,
+    angle_ab: float,  # Угол между сторонами a и b в градусах
+    center=(0.0, 0.0)
+) -> tuple[Point, Point, Point]:
+    """Создает треугольник по двум сторонам и углу между ними"""
+    cx, cy = center
+    angle_rad = radians(angle_ab)
+    
+    # Первая вершина
+    p1 = (cx - side_a / 2, cy - side_b / 2, 0.0)
+    
+    # Вторая вершина (по стороне a)
+    p2 = (cx + side_a / 2, cy - side_b / 2, 0.0)
+    
+    # Третья вершина (по стороне b под углом)
+    dx = side_b * cos(angle_rad)
+    dy = side_b * sin(angle_rad)
+    
+    p3 = (cx - side_a / 2 + dx, cy - side_b / 2 + dy, 0.0)
+    
+    return (p1, p2, p3)
+
+
+def triangle_by_2_angles_and_side(
+    angle_a: float,  # Угол при вершине A в градусах
+    angle_b: float,  # Угол при вершине B в градусах
+    side_ab: float,  # Сторона между вершинами A и B
+    center=(0.0, 0.0)
+) -> tuple[Point, Point, Point]:
+    """Создает треугольник по двум углам и стороне между ними"""
+    # Проверка суммы углов
+    if angle_a + angle_b >= 180:
+        raise ValueError("Сумма двух углов должна быть меньше 180 градусов")
+    
+    cx, cy = center
+    angle_c = 180 - angle_a - angle_b
+    
+    # Переводим в радианы
+    a_rad = radians(angle_a)
+    b_rad = radians(angle_b)
+    c_rad = radians(angle_c)
+    
+    # Вычисляем стороны по теореме синусов
+    side_bc = side_ab * sin(a_rad) / sin(c_rad)
+    side_ac = side_ab * sin(b_rad) / sin(c_rad)
+    
+    # Строим треугольник
+    p1 = (cx - side_ab / 2, cy - side_ac / 2, 0.0)
+    p2 = (cx + side_ab / 2, cy - side_ac / 2, 0.0)
+    
+    # Вычисляем координаты третьей вершины
+    h = side_ac * sin(a_rad)
+    dx = side_ac * cos(a_rad)
+    
+    p3 = (cx - side_ab / 2 + dx, cy - side_ac / 2 + h, 0.0)
+    
+    return (p1, p2, p3)
+
+
+def isosceles_triangle_by_sides(
+    base: float,
+    equal_side: float,
+    center=(0.0, 0.0)
+) -> tuple[Point, Point, Point]:
+    """Создает равнобедренный треугольник по основанию и равным сторонам"""
+    # Проверка существования
+    if equal_side * 2 <= base:
+        raise ValueError("Равные стороны слишком малы для такого основания")
+    
+    cx, cy = center
+    
+    # Высота треугольника
+    h = sqrt(equal_side**2 - (base/2)**2)
+    
+    p1 = (cx - base / 2, cy - h / 3, 0.0)
+    p2 = (cx + base / 2, cy - h / 3, 0.0)
+    p3 = (cx, cy + 2 * h / 3, 0.0)
+    
+    return (p1, p2, p3)
+
+
+def isosceles_triangle_by_angle_and_side(
+    base: float,
+    angle_at_base: float,  # Угол при основании в градусах
+    center=(0.0, 0.0)
+) -> tuple[Point, Point, Point]:
+    """Создает равнобедренный треугольник по основанию и углу при основании"""
+    angle_rad = radians(angle_at_base)
+    
+    # Высота треугольника
+    h = (base / 2) * tan(angle_rad)
+    
+    cx, cy = center
+    
+    p1 = (cx - base / 2, cy - h / 3, 0.0)
+    p2 = (cx + base / 2, cy - h / 3, 0.0)
+    p3 = (cx, cy + 2 * h / 3, 0.0)
+    
+    return (p1, p2, p3)
+
+
+def isosceles_triangle_by_side_and_angle(
+    equal_side: float,
+    angle_at_vertex: float,  # Угол при вершине в градусах
+    center=(0.0, 0.0)
+) -> tuple[Point, Point, Point]:
+    """Создает равнобедренный треугольник по равной стороне и углу при вершине"""
+    angle_rad = radians(angle_at_vertex)
+    
+    # Основание треугольника
+    base = 2 * equal_side * sin(angle_rad / 2)
+    
+    # Высота треугольника
+    h = equal_side * cos(angle_rad / 2)
+    
+    cx, cy = center
+    
+    p1 = (cx - base / 2, cy - h / 3, 0.0)
+    p2 = (cx + base / 2, cy - h / 3, 0.0)
+    p3 = (cx, cy + 2 * h / 3, 0.0)
+    
+    return (p1, p2, p3)
+
+
+def right_triangle_by_sides(
+    leg_a: float,
+    leg_b: float,
+    center=(0.0, 0.0)
+) -> tuple[Point, Point, Point]:
+    """Создает прямоугольный треугольник по двум катетам"""
+    cx, cy = center
+    
+    p1 = (cx - leg_a / 2, cy - leg_b / 2, 0.0)
+    p2 = (cx + leg_a / 2, cy - leg_b / 2, 0.0)
+    p3 = (cx - leg_a / 2, cy + leg_b / 2, 0.0)
+    
+    return (p1, p2, p3)
+
+
+def trapezoid_points(
+    bottom: float,
+    top: float,
+    height: float,
+    center=(0.0, 0.0)
+) -> tuple[Point, Point, Point, Point]:
+    cx, cy = center
+    return (
+        (cx - bottom / 2, cy - height / 2, 0.0),
+        (cx + bottom / 2, cy - height / 2, 0.0),
+        (cx + top / 2, cy + height / 2, 0.0),
+        (cx - top / 2, cy + height / 2, 0.0)
+    )
+
+
+================================================================================
+curves.py
+================================================================================
+
+from __future__ import annotations
+
+import math
+
+import NXOpen
+import NXOpen.Features
+import NXOpen.GeometricUtilities
+
+from .base import Profile
+
+
+def _create_line_feature(
+    workPart,
+    start,
+    end
+):
+    """
+    Создает Feature линии.
+    """
+
+    length = math.sqrt(
+
+        (end[0] - start[0]) ** 2 +
+        (end[1] - start[1]) ** 2 +
+        (end[2] - start[2]) ** 2
+
+    )
+
+    builder = workPart.BaseFeatures.CreateAssociativeLineBuilder(
+
+        NXOpen.Features.AssociativeLine.Null
+
+    )
+
+    builder.StartPointOptions = (
+
+        NXOpen.Features.AssociativeLineBuilder.StartOption.Point
+
+    )
+
+    builder.StartPointReference = (
+
+        NXOpen.Features.AssociativeLineBuilder.StartReference.Absolute
+
+    )
+
+    builder.EndPointOptions = (
+
+        NXOpen.Features.AssociativeLineBuilder.EndOption.Point
+
+    )
+
+    builder.EndPointReference = (
+
+        NXOpen.Features.AssociativeLineBuilder.EndReference.Absolute
+
+    )
+
+    builder.StartAngle.SetFormula("0")
+
+    builder.EndAngle.SetFormula("270")
+
+    builder.Limits.StartLimit.Distance.SetFormula("0")
+
+    builder.Limits.EndLimit.Distance.SetFormula(str(length))
+
+    start_point = workPart.Points.CreatePoint(
+
+        NXOpen.Point3d(*start)
+
+    )
+
+    end_point = workPart.Points.CreatePoint(
+
+        NXOpen.Point3d(*end)
+
+    )
+
+    builder.StartPoint.Value = start_point
+
+    builder.EndPoint.Value = end_point
+
+    feature = builder.Commit()
+
+    builder.Destroy()
+
+    return feature
+
+
+class Line(Profile):
+
+    """
+    Отрезок.
+    """
+
+    def __init__(
+        self,
+        workPart,
+        start,
+        end
+    ):
+
+        self.start = start
+        self.end = end
+
+        feature = _create_line_feature(
+
+            workPart,
+            start,
+            end
+
+        )
+
+        curve = feature.FindObject("CURVE 1")
+
+        self.feature = feature
+
+        super().__init__([curve])
+
+
+def _create_circle_feature(
+    workPart,
+    radius,
+    center
+):
+    """
+    Создает Feature окружности.
+    """
+
+    builder = workPart.BaseFeatures.CreateAssociativeArcBuilder(
+
+        NXOpen.Features.AssociativeArc.Null
+
+    )
+
+    builder.Type = (
+
+        NXOpen.Features.AssociativeArcBuilder.Types.ArcFromCenter
+
+    )
+
+    builder.EndPointOptions = (
+
+        NXOpen.Features.AssociativeArcBuilder.EndOption.Radius
+
+    )
+
+    builder.Radius.SetFormula(str(radius))
+
+    builder.Limits.FullCircle = True
+
+    center_point = workPart.Points.CreatePoint(
+
+        NXOpen.Point3d(
+
+            center[0],
+            center[1],
+            0.0
+
+        )
+
+    )
+
+    builder.CenterPoint.Value = center_point
+
+    builder.CenterPointReference = (
+
+        NXOpen.Features.AssociativeArcBuilder.CenterReference.Absolute
+
+    )
+
+    start_point = workPart.Points.CreatePoint(
+
+        NXOpen.Point3d(
+
+            center[0] + radius,
+            center[1],
+            0.0
+
+        )
+
+    )
+
+    builder.StartPoint.Value = start_point
+
+    builder.ZonePoint = NXOpen.Point3d(
+
+        center[0] + radius * 0.9,
+
+        center[1] + radius * 0.4,
+
+        0.0
+
+    )
+
+    feature = builder.Commit()
+
+    builder.Destroy()
+
+    return feature
+
+
+class Circle(Profile):
+
+    """
+    Окружность.
+    """
+
+    def __init__(
+        self,
+        workPart,
+        radius,
+        center=(0.0, 0.0)
+    ):
+
+        self.radius = radius
+
+        self.center = center
+
+        feature = _create_circle_feature(
+
+            workPart,
+
+            radius,
+
+            center
+
+        )
+
+        curve = feature.FindObject("CURVE 1")
+
+        self.feature = feature
+
+        super().__init__([curve])
+
+
+================================================================================
+shapes.py
+================================================================================
+
+from __future__ import annotations
+
+from .base import Profile
+from .curves import Line
+from .geometry import (
+    rectangle_points,
+    equilateral_triangle_points,
+    triangle_by_3_sides,
+    triangle_by_2_sides_and_angle,
+    triangle_by_2_angles_and_side,
+    isosceles_triangle_by_sides,
+    isosceles_triangle_by_angle_and_side,
+    isosceles_triangle_by_side_and_angle,
+    right_triangle_by_sides,
+    trapezoid_points,
+)
+
+
+class Rectangle(Profile):
+    """
+    Прямоугольник.
+
+    Parameters
+    ----------
+    width : float
+        Ширина.
+    height : float
+        Высота.
+    center : tuple(float, float)
+        Координаты центра.
+    """
+
+    def __init__(
+        self,
+        workPart,
+        width: float,
+        height: float,
+        center=(0.0, 0.0)
+    ):
+        self.width = width
+        self.height = height
+        self.center = center
+
+        p1, p2, p3, p4 = rectangle_points(width, height, center)
+
+        l1 = Line(workPart, p1, p2)
+        l2 = Line(workPart, p2, p3)
+        l3 = Line(workPart, p3, p4)
+        l4 = Line(workPart, p4, p1)
+
+        self.lines = [l1, l2, l3, l4]
+        curves = []
+        for line in self.lines:
+            curves.extend(line.curves)
+        super().__init__(curves)
+
+
+class Square(Rectangle):
+    """
+    Квадрат.
+    """
+
+    def __init__(
+        self,
+        workPart,
+        side: float,
+        center=(0.0, 0.0)
+    ):
+        self.side = side
+        super().__init__(workPart, width=side, height=side, center=center)
+
+
+class EquilateralTriangle(Profile):
+    """
+    Равносторонний треугольник по стороне.
+    """
+    
+    def __init__(
+        self,
+        workPart,
+        side: float,
+        center=(0.0, 0.0)
+    ):
+        self.side = side
+        self.center = center
+        
+        p1, p2, p3 = equilateral_triangle_points(side, center)
+        
+        l1 = Line(workPart, p1, p2)
+        l2 = Line(workPart, p2, p3)
+        l3 = Line(workPart, p3, p1)
+        
+        self.lines = [l1, l2, l3]
+        curves = []
+        for line in self.lines:
+            curves.extend(line.curves)
+        super().__init__(curves)
+
+
+class TriangleBy3Sides(Profile):
+    """
+    Треугольник по трем сторонам.
+    
+    Parameters
+    ----------
+    side_a : float
+        Первая сторона.
+    side_b : float
+        Вторая сторона.
+    side_c : float
+        Третья сторона.
+    """
+    
+    def __init__(
+        self,
+        workPart,
+        side_a: float,
+        side_b: float,
+        side_c: float,
+        center=(0.0, 0.0)
+    ):
+        p1, p2, p3 = triangle_by_3_sides(side_a, side_b, side_c, center)
+        
+        l1 = Line(workPart, p1, p2)
+        l2 = Line(workPart, p2, p3)
+        l3 = Line(workPart, p3, p1)
+        
+        self.lines = [l1, l2, l3]
+        curves = []
+        for line in self.lines:
+            curves.extend(line.curves)
+        super().__init__(curves)
+
+
+class TriangleBy2SidesAndAngle(Profile):
+    """
+    Треугольник по двум сторонам и углу между ними.
+    
+    Parameters
+    ----------
+    side_a : float
+        Первая сторона.
+    side_b : float
+        Вторая сторона.
+    angle_ab : float
+        Угол между сторонами a и b в градусах.
+    """
+    
+    def __init__(
+        self,
+        workPart,
+        side_a: float,
+        side_b: float,
+        angle_ab: float,
+        center=(0.0, 0.0)
+    ):
+        p1, p2, p3 = triangle_by_2_sides_and_angle(side_a, side_b, angle_ab, center)
+        
+        l1 = Line(workPart, p1, p2)
+        l2 = Line(workPart, p2, p3)
+        l3 = Line(workPart, p3, p1)
+        
+        self.lines = [l1, l2, l3]
+        curves = []
+        for line in self.lines:
+            curves.extend(line.curves)
+        super().__init__(curves)
+
+
+class TriangleBy2AnglesAndSide(Profile):
+    """
+    Треугольник по двум углам и стороне между ними.
+    
+    Parameters
+    ----------
+    angle_a : float
+        Угол при вершине A в градусах.
+    angle_b : float
+        Угол при вершине B в градусах.
+    side_ab : float
+        Сторона между вершинами A и B.
+    """
+    
+    def __init__(
+        self,
+        workPart,
+        angle_a: float,
+        angle_b: float,
+        side_ab: float,
+        center=(0.0, 0.0)
+    ):
+        p1, p2, p3 = triangle_by_2_angles_and_side(angle_a, angle_b, side_ab, center)
+        
+        l1 = Line(workPart, p1, p2)
+        l2 = Line(workPart, p2, p3)
+        l3 = Line(workPart, p3, p1)
+        
+        self.lines = [l1, l2, l3]
+        curves = []
+        for line in self.lines:
+            curves.extend(line.curves)
+        super().__init__(curves)
+
+
+class IsoscelesTriangleBySides(Profile):
+    """
+    Равнобедренный треугольник по основанию и равным сторонам.
+    
+    Parameters
+    ----------
+    base : float
+        Основание треугольника.
+    equal_side : float
+        Равные стороны.
+    """
+    
+    def __init__(
+        self,
+        workPart,
+        base: float,
+        equal_side: float,
+        center=(0.0, 0.0)
+    ):
+        p1, p2, p3 = isosceles_triangle_by_sides(base, equal_side, center)
+        
+        l1 = Line(workPart, p1, p2)
+        l2 = Line(workPart, p2, p3)
+        l3 = Line(workPart, p3, p1)
+        
+        self.lines = [l1, l2, l3]
+        curves = []
+        for line in self.lines:
+            curves.extend(line.curves)
+        super().__init__(curves)
+
+
+class IsoscelesTriangleByAngleAndSide(Profile):
+    """
+    Равнобедренный треугольник по основанию и углу при основании.
+    
+    Parameters
+    ----------
+    base : float
+        Основание треугольника.
+    angle_at_base : float
+        Угол при основании в градусах.
+    """
+    
+    def __init__(
+        self,
+        workPart,
+        base: float,
+        angle_at_base: float,
+        center=(0.0, 0.0)
+    ):
+        p1, p2, p3 = isosceles_triangle_by_angle_and_side(base, angle_at_base, center)
+        
+        l1 = Line(workPart, p1, p2)
+        l2 = Line(workPart, p2, p3)
+        l3 = Line(workPart, p3, p1)
+        
+        self.lines = [l1, l2, l3]
+        curves = []
+        for line in self.lines:
+            curves.extend(line.curves)
+        super().__init__(curves)
+
+
+class IsoscelesTriangleBySideAndAngle(Profile):
+    """
+    Равнобедренный треугольник по равной стороне и углу при вершине.
+    
+    Parameters
+    ----------
+    equal_side : float
+        Равная сторона.
+    angle_at_vertex : float
+        Угол при вершине в градусах.
+    """
+    
+    def __init__(
+        self,
+        workPart,
+        equal_side: float,
+        angle_at_vertex: float,
+        center=(0.0, 0.0)
+    ):
+        p1, p2, p3 = isosceles_triangle_by_side_and_angle(equal_side, angle_at_vertex, center)
+        
+        l1 = Line(workPart, p1, p2)
+        l2 = Line(workPart, p2, p3)
+        l3 = Line(workPart, p3, p1)
+        
+        self.lines = [l1, l2, l3]
+        curves = []
+        for line in self.lines:
+            curves.extend(line.curves)
+        super().__init__(curves)
+
+
+class RightTriangle(Profile):
+    """
+    Прямоугольный треугольник по двум катетам.
+    
+    Parameters
+    ----------
+    leg_a : float
+        Первый катет.
+    leg_b : float
+        Второй катет.
+    """
+    
+    def __init__(
+        self,
+        workPart,
+        leg_a: float,
+        leg_b: float,
+        center=(0.0, 0.0)
+    ):
+        p1, p2, p3 = right_triangle_by_sides(leg_a, leg_b, center)
+        
+        l1 = Line(workPart, p1, p2)
+        l2 = Line(workPart, p2, p3)
+        l3 = Line(workPart, p3, p1)
+        
+        self.lines = [l1, l2, l3]
+        curves = []
+        for line in self.lines:
+            curves.extend(line.curves)
+        super().__init__(curves)
+
+
+class Trapezoid(Profile):
+    """
+    Равнобедренная трапеция.
+
+    Parameters
+    ----------
+    bottom : float
+        Нижнее основание.
+    top : float
+        Верхнее основание.
+    height : float
+        Высота.
+    """
+
+    def __init__(
+        self,
+        workPart,
+        bottom: float,
+        top: float,
+        height: float,
+        center=(0.0, 0.0)
+    ):
+        self.bottom = bottom
+        self.top = top
+        self.height = height
+        self.center = center
+
+        p1, p2, p3, p4 = trapezoid_points(bottom, top, height, center)
+
+        l1 = Line(workPart, p1, p2)
+        l2 = Line(workPart, p2, p3)
+        l3 = Line(workPart, p3, p4)
+        l4 = Line(workPart, p4, p1)
+
+        self.lines = [l1, l2, l3, l4]
+        curves = []
+        for line in self.lines:
+            curves.extend(line.curves)
+        super().__init__(curves)
+
+
+================================================================================
+solid.py
+================================================================================
+
+from __future__ import annotations
+
+import NXOpen
+import NXOpen.Features
+import NXOpen.GeometricUtilities
+
+from .base import Profile
+
+
+class Extrude:
+    """
+    Вытягивание одного или нескольких профилей.
+
+    Первый профиль считается внешним контуром.
+
+    Остальные считаются внутренними контурами
+    (например отверстиями).
+    """
+
+    def __init__(
+        self,
+        workPart,
+        profiles: list[Profile],
+        height: float,
+        direction=(0.0, 0.0, 1.0)
+    ):
+
+        if len(profiles) == 0:
+            raise ValueError("Не передано ни одного профиля.")
+
+        self.workPart = workPart
+        self.profiles = profiles
+        self.height = height
+
+        builder = workPart.Features.CreateExtrudeBuilder(
+            NXOpen.Features.Feature.Null
+        )
+
+        section = workPart.Sections.CreateSection(
+            0.01,
+            0.01,
+            0.5
+        )
+
+        builder.Section = section
+
+        builder.AllowSelfIntersectingSection(True)
+
+        builder.DistanceTolerance = 0.01
+
+        builder.Limits.StartExtend.Value.SetFormula("0")
+
+        builder.Limits.EndExtend.Value.SetFormula(str(height))
+
+        builder.Draft.FrontDraftAngle.SetFormula("0")
+
+        builder.Draft.BackDraftAngle.SetFormula("0")
+
+        builder.Offset.StartOffset.SetFormula("0")
+
+        builder.Offset.EndOffset.SetFormula("0")
+
+        smart_profile = builder.SmartVolumeProfile
+
+        smart_profile.OpenProfileSmartVolumeOption = False
+
+        smart_profile.CloseProfileRule = (
+            NXOpen.GeometricUtilities.
+            SmartVolumeProfileBuilder.
+            CloseProfileRuleType.Fci
+        )
+
+        section.DistanceTolerance = 0.01
+
+        section.ChainingTolerance = 0.01
+
+        section.AllowSelfIntersection(True)
+
+        section.AllowDegenerateCurves(False)
+
+        section.SetAllowedEntityTypes(
+
+            NXOpen.Section.AllowTypes.OnlyCurves
+
+        )
+
+        rule_options = workPart.ScRuleFactory.CreateRuleOptions()
+
+        rule_options.SetSelectedFromInactive(False)
+
+        curves = []
+
+        for profile in profiles:
+
+            curves.extend(profile.curves)
+
+        rule = workPart.ScRuleFactory.CreateRuleBaseCurveDumb(
+
+            curves,
+
+            rule_options
+
+        )
+
+        rule_options.Dispose()
+
+        rules = [rule]
+
+        section.AddToSection(
+
+            rules,
+
+            NXOpen.NXObject.Null,
+
+            NXOpen.NXObject.Null,
+
+            NXOpen.NXObject.Null,
+
+            NXOpen.Point3d(0.0, 0.0, 0.0),
+
+            NXOpen.Section.Mode.Create,
+
+            False
+
+        )
+
+        origin = NXOpen.Point3d(0.0, 0.0, 0.0)
+
+        vector = NXOpen.Vector3d(
+
+            direction[0],
+
+            direction[1],
+
+            direction[2]
+
+        )
+
+        nx_direction = workPart.Directions.CreateDirection(
+
+            origin,
+
+            vector,
+
+            NXOpen.SmartObject.UpdateOption.WithinModeling
+
+        )
+
+        builder.Direction = nx_direction
+
+        builder.BooleanOperation.Type = (
+
+            NXOpen.GeometricUtilities.
+
+            BooleanOperation.BooleanType.Create
+
+        )
+
+        builder.BooleanOperation.SetTargetBodies([])
+
+        builder.ParentFeatureInternal = False
+
+        self.feature = builder.CommitFeature()
+
+        builder.Destroy()
+
+
+================================================================================
+display.py
+================================================================================
+
+from __future__ import annotations
+
+import NXOpen
+
+from .base import Profile
+
+
+class Hide:
+    """
+    Скрывает двумерные кривые профилей.
+    """
+
+    def __init__(
+        self,
+        session: NXOpen.Session,
+        *profiles: Profile
+    ):
+
+        objects = []
+
+        for profile in profiles:
+
+            objects.extend(profile.curves)
+
+        if objects:
+
+            session.DisplayManager.BlankObjects(objects)
+
+
+
+============================================================
+
+ЗАПРОС ПОЛЬЗОВАТЕЛЯ
+
+============================================================
+
+нарисуй треугольную пластину размерами сторон 30 40 50 и толщиной 3 и отверстием радиусом 5
+
+============================================================
+
+Напиши полностью готовый Python-файл.
+
+Используй библиотеку nx_primitives.
+
+Использовать NXOpen напрямую разрешается только для получения Session и WorkPart.
+
+Не придумывай классы.
+
+Не придумывай функции.
+
+Используй только существующие классы библиотеки.
+
+В начале файла обязательно добавь настройку путей и импорты:
+
+import sys
+import os
+
+project_path = r'c:\\Users\\user\\Desktop\\AI_3D_NX_python_optimization_project'
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
+
+import NXOpen
+from nx_primitives import Rectangle, Extrude, Hide  # и другие нужные классы
+
+Ответ должен содержать только Python-код.
+
+
+================================================================================
+Ответ модели
+================================================================================
+```python
+import sys
+import os
+
+project_path = r'c:\\Users\\user\\Desktop\\AI_3D_NX_python_optimization_project'
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
+
+import NXOpen
+from nx_primitives import Rectangle, Extrude, Hide, Profile  # и другие нужные классы
+
+# Получаем Session и WorkPart
+theSession = NXOpen.Session.GetSession()
+workPart = theSession.Parts.Work
+
+# Создаем профиль треугольной пластинки
+triangle_profile = Profile(workPart)
+triangle_profile.lines = [
+    Line(workPart, (0, 0), (30, 0)),
+    Line(workPart, (30, 0), (45, 40)),
+    Line(workPart, (45, 40), (0, 0))
+]
+
+# Создаем профиль отверстия
+circle_profile = Profile(workPart)
+circle_center = (45 / 2, 40 / 2)
+radius = 5
+angle = 360
+arc_points = [(circle_center[0] + radius * math.cos(math.radians(i)), circle_center[1] + radius * math.sin(math.radians(i))) for i in range(0, 370, 10)]
+circle_profile.lines.append(Line(workPart, circle_center, arc_points[0]))
+for i in range(len(arc_points) - 1):
+    circle_profile.lines.append(Line(workPart, arc_points[i], arc_points[i + 1]))
+circle_profile.lines.append(Line(workPart, arc_points[-1], circle_center))
+
+# Создаем траекторию для выдавливания
+rectangle = Rectangle(workPart)
+rectangle.width = 50
+rectangle.height = 52
+
+# Выполняем выдавливание
+extrude = Extrude(workPart, [triangle_profile, circle_profile], 3)
+
+# Скрываем внутренний отверстие
+hide = Hide(theSession, circle_profile)
+```
