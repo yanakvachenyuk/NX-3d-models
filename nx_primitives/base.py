@@ -57,7 +57,3 @@ class ClosedProfile(Profile):
         dir_prev = _normalize3(_subtract(p_prev, p0))
 
         return _add(_add(p0, _scale(dir_next, offset)), _scale(dir_prev, offset))
-
-        # base.py, добавить в ClosedProfile
-
-    

@@ -118,10 +118,21 @@ class Line(Profile):
 
         super().__init__([curve])
 
-
     @classmethod
-    def on_frame(cls, workPart, radius, frame, u=0.0, v=0.0):
-        return cls(workPart, radius, center=frame.point(u, v), normal=frame.normal)
+    def on_frame(cls, workPart, frame, start_uv, end_uv):
+        """
+        Отрезок в плоскости frame, заданный ЛОКАЛЬНЫМИ (u, v)
+        координатами начала и конца (та же схема, что и у
+        Polygon.on_frame): start_uv = (u, v), end_uv = (u, v).
+
+        ПРЕЖНЯЯ сигнатура on_frame(workPart, radius, frame, u=0.0, v=0.0)
+        была скопирована с Circle.on_frame и не соответствовала
+        __init__ этого класса (Line не принимает radius/center/normal) —
+        любой вызов падал с TypeError. Эта версия приведена к реальной
+        сигнатуре Line.__init__(workPart, start, end).
+        """
+        start, end = frame.points([start_uv, end_uv])
+        return cls(workPart, start, end)
 
 
 def _plane_basis(normal):
@@ -152,7 +163,7 @@ def _create_circle_feature(workPart, radius, center, normal=(0.0, 0.0, 1.0)):
     radius = float(radius)
     center = (float(center[0]), float(center[1]), float(center[2]))
     normal = (float(normal[0]), float(normal[1]), float(normal[2]))
-    
+
     builder = workPart.BaseFeatures.CreateAssociativeArcBuilder(
         NXOpen.Features.AssociativeArc.Null
     )

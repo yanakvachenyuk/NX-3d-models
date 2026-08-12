@@ -615,3 +615,141 @@ piece = box.attach(lambda f: rect_profile(workPart, f, 10, 10), thickness=2.0, f
 Это ПОСЛЕДНИЙ вариант — предпочитай anchor()/center_frame(), они уже
 считают направления автоматически и реже дают геометрически неверный
 результат.
+
+
+================================================================================
+PUBLIC API (сигнатуры + краткие описания, без реализации)
+Используй ТОЛЬКО то, что здесь перечислено.
+================================================================================
+
+class Profile:
+    # Базовый класс всех двумерных профилей.
+    def __init__(self, curves: list[NXOpen.Curve])
+
+class ClosedProfile:
+    # Базовый класс замкнутых плоских профилей (многоугольников).
+    def __init__(self, curves: list[NXOpen.Curve], vertices: list[tuple])
+    def corner_point(self, index: int, offset: float)
+        # Возвращает точку, смещённую на offset от вершины index
+
+class Line:
+    # Отрезок.
+    def __init__(self, workPart, start, end)
+    def on_frame(cls, workPart, frame, start_uv, end_uv)
+        # Отрезок в плоскости frame, заданный ЛОКАЛЬНЫМИ (u, v)
+
+class Circle:
+    # Окружность.
+    def __init__(self, workPart, radius, center=(0.0, 0.0), normal=(0.0, 0.0, 1.0))
+    def on_frame(cls, workPart, radius, frame, u=0.0, v=0.0)
+
+class Hide:
+    # Скрывает двумерные кривые профилей.
+    def __init__(self, session: NXOpen.Session, *profiles)
+
+class Frame:
+    # Локальная система координат в пространстве.
+    def __init__(self, origin, u, v, normal=None)
+    def point(self, u=0.0, v=0.0, w=0.0)
+    def points(self, local_xy)
+
+class Triangle:
+    # Треугольник.
+    def __init__(self, workPart, p1, p2, p3)
+    def by_3_sides(cls, workPart, side_a, side_b, side_c, center=(0.0, 0.0), frame=None)
+    def by_2_sides_and_angle(cls, workPart, side_a: float, side_b: float, angle_ab: float, center=(0.0, 0.0), frame=None)
+    def by_2_angles_and_side(cls, workPart, angle_a: float, angle_b: float, side_ab: float, center=(0.0, 0.0), frame=None)
+
+class Parallelogram:
+    def __init__(self, workPart, side_a, side_b, angle, center=(0.0, 0.0), frame=None)
+
+class Polygon:
+    # Многоугольник по явным 3D-вершинам.
+    def __init__(self, workPart, vertices: list)
+    def on_frame(cls, workPart, frame, local_vertices)
+
+def rect_profile(workPart, frame, length, width, u0: float=0.0, v0: float=0.0)
+    # Прямоугольник length x width на заданном Frame.
+
+def edges_in_box(body, p_min, p_max)
+    # Ищет рёбра тела, ЦЕЛИКОМ лежащие внутри осевого параллелепипеда
+
+def edges_near(body, point, tol=1.0)
+    # Ищет рёбра тела, СЕРЕДИНА которых находится в пределах tol от point.
+
+class Extrude:
+    # Вытягивание одного или нескольких профилей.
+    def __init__(self, workPart, profiles: list[Profile], height: float, direction=(0.0, 0.0, 1.0))
+    def bottom_edges(self, profile_index: int=0)
+        # Список имён ВСЕХ рёбер нижнего контура ("ab", "bc", ...) в
+    def top_edges(self, profile_index: int=0)
+        # Список имён ВСЕХ рёбер верхнего контура ("a1b1", "b1c1", ...)
+    def vertical_edges(self, profile_index: int=0)
+        # Список имён ВСЕХ вертикальных рёбер ("aa1", "bb1", ...).
+    def contact_edges(self, profile_index: int=0)
+        # Контур примыкания для детали, присоединённой СБОКУ через
+    def inward_direction(self, edge_name: str)
+        # Возвращает единичный вектор направления "внутрь" — от середины
+    def interior_direction(self, edge_name, profile_index=0)
+        # Направление ОТ ребра ВНУТРЬ этого тела. Не зависит от rise/grow
+    def find_edge(self, name: str, profile_index: int=0)
+        # Возвращает объект NXOpen.Edge по имени ребра.
+    def edges_on(self, body, names, profile_index: int=0)
+        # Ищет рёбра ЭТОГО профиля (по именам, например top_edges() или
+    def edge_points(self, name: str, profile_index: int=0)
+        # Возвращает пару 3D-точек (начало, конец) ребра по его имени.
+    def edge_frame(self, edge_name, profile_index=0, rise=None)
+    def attach_plate(self, edge_name, length, width, thickness, rise='same', grow='auto', overlap='auto', profile_index=0, holes=None)
+    def vertex(self, name: str, profile_index: int=0)
+        # Точка в 3D по имени вершины ("a", "b1", "c", ...).
+    def anchor(self, edge_name, profile_index: int=0, t: float=0.0, offset: float=0.0, angle: float=0.0, lift: float=0.0)
+        # Frame в произвольной точке РЕБРА — для деталей, растущих ОТ ребра
+    def center_frame(self, profile_index: int=0, side: str='same', spin: float=0.0, du: float=0.0, dv: float=0.0, lift=None)
+        # Frame для деталей, лежащих ПЛАШМЯ на грани целиком (не на ребре).
+    def attach(self, build, thickness: float, frame=None, edge_name=None, profile_index: int=0, t: float=0.0, offset: float=0.0, angle: float=0.0, lift: float=0.0, direction=None, holes=None)
+        # Универсальное присоединение ЛЮБОЙ фигуры к этому телу.
+
+class Fillet:
+    # Скругление рёбер тела.
+    def __init__(self, workPart, extrude: Extrude, edges: list, radius: float)
+
+class Boolean:
+    # Булева операция над телами: объединение, вычитание, пересечение.
+    def __init__(self, workPart, target, tools, kind='unite', tolerance=0.01)
+
+class Union:
+    def __init__(self, workPart, target, tools, tolerance=0.01)
+
+class Subtract:
+    def __init__(self, workPart, target, tools, tolerance=0.01)
+
+class Intersect:
+    def __init__(self, workPart, target, tools, tolerance=0.01)
+
+def attachment_seam(child: Extrude, parent_body, profile_index: int=0, ring: str='bottom')
+    # Рёбра шва для детали, присоединённой ВПЛОТНУЮ (через attach() /
+
+def edges_after_boolean(child: Extrude, target_body, edge_names, profile_index: int=0)
+    # Обобщение attachment_seam: ищет на target_body рёбра child
+
+================================================================================
+END OF API
+================================================================================
+
+
+================================================================================
+USER REQUEST
+================================================================================
+
+Основание 90×50×4. По центру сверху босс 25×25 высотой 6. В боссе сквозное отверстие радиусом 5. Объединить. Скруглить шов и верхние рёбра босса радиусом 1.
+
+
+================================================================================
+IMPORTANT
+
+Return ONLY executable Python code.
+Do NOT explain anything.
+Do NOT use Markdown.
+Do NOT wrap the code with ```.
+The answer must consist ONLY of Python code.
+================================================================================

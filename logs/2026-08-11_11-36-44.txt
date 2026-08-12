@@ -46,7 +46,8 @@ Session, workPart и все публичные имена из nx_primitives у�
   Parallelogram(...)
   Polygon(...) / Polygon.on_frame(...)
   Circle(...) / Circle.on_frame(...)
-  и все методы Extrude (anchor, center_frame, attach, attach_plate, bottom_edges, top_edges, vertical_edges, edges_on и т.д.)
+  и все методы Extrude (anchor, center_frame, attach, attach_plate,
+  bottom_edges, top_edges, vertical_edges и т.д.)
 
 Никогда не используй "голый" NXOpen напрямую.
 Всё строится ТОЛЬКО через классы и функции, перечисленные выше.
@@ -331,17 +332,6 @@ radius), а НЕ в раздельные последовательные выз
 скругления" — это не значит, что не хватает ещё одного ребра другого
 типа, это значит, что рёбра нужно объединить в один вызов.
 
-ЕСЛИ первый аргумент Fillet (extrude) - это тело, которое уже
-участвовало как tools в Union/Subtract/Intersect: его .body
-suppressed, и искать по нему рёбра напрямую нельзя (см. правило в
-разделе про Union/Subtract/Intersect выше). В этом случае:
-- сначала получите нужные Edge через extrude.edges_on(merged.body,
-  names) / edges_after_boolean(...) / attachment_seam(...);
-- вторым аргументом Fillet передайте ЛЮБОЙ ДРУГОЙ АКТИВНЫЙ Extrude
-  (обычно target, т.е. тело, в которое всё слилось) - он используется
-  только как формальный "якорь", т.к. переданные Edge уже готовы и
-  поиск по имени для них не выполняется.
-
 --- Булевы операции ---
 
 Union(workPart, target, tools, tolerance=0.01)
@@ -362,24 +352,6 @@ Intersect(workPart, target, tools, tolerance=0.01)
     Union (как ребро самой детали) -> .new_edges его НЕ увидит (список
     может оказаться короче ожидаемого или вообще пустым). В ЭТОМ
     случае используй attachment_seam(...) вместо new_edges.
-
-ВАЖНО (общее правило, не только про шов): сразу ПОСЛЕ Union/Subtract/
-Intersect тело(а), переданные как tools, становятся SUPPRESSED - NX
-физически поглощает их в target. Это значит, что tools.body больше
-не активно, и ЛЮБОЙ вызов, использующий tools.body напрямую -
-tools.find_edge(...), Fillet(workPart, tools, [...], radius) -
-упадёт с ошибкой NX "Операция, запрещенная на подавленном объекте".
-Это касается НЕ ТОЛЬКО рёбер шва, но и любых "собственных" именных
-рёбер tools - например top_edges()/bottom_edges()/vertical_edges()
-присоединённой детали, если их нужно скруглить ПОСЛЕ Union.
-
-Если такие рёбра нужны ПОСЛЕ булевой операции - есть ровно два пути:
-1. tools.edges_on(merged.body, names) (или свободная функция
-   edges_after_boolean(tools, merged.body, names)) - ищет рёбра по
-   заранее сохранённым координатам НА РЕЗУЛЬТИРУЮЩЕМ теле, а не
-   через само tools.body. Работает для любых имён, не только шва.
-2. Сделать нужный Fillet НА tools ДО вызова Union/Subtract/Intersect,
-   пока тело ещё активно (см. пример 2b ниже).
 
 attachment_seam(child, parent_body, profile_index=0, ring="bottom") -> list[Edge]
     Найти рёбра шва по КОНТУРУ child (детали, присоединённой ВПЛОТНУЮ
@@ -492,7 +464,10 @@ Hide(session, *profiles)
      группой и радиусом. Порядок вызовов можно не продумывать особо:
      find_edge сам находит рёбра даже после того, как предыдущий Fillet
      изменил геометрию у общих вершин.
-   - Скругление ШВА после Union -> сначала merged.new_edges; если список пуст/короче ожидаемого (деталь была присоединена вплотную) -> attachment_seam(child, merged.body) или edges_after_boolean(child, merged.body, ["имя1", ...]). - Скругление ЛЮБЫХ ДРУГИХ (не шовных) именованных рёбер присоединённой детали (например top_edges() у boss) ПОСЛЕ Union -> НИКОГДА не Fillet(workPart, child, child.top_edges(), radius) - child.body к этому моменту suppressed. Либо сделайте этот Fillet НА child ДО Union (см. пример 2b), либо получите Edge через child.edges_on(merged.body, child.top_edges()) и передайте их в Fillet(workPart, target, ..., radius) вместе со швом одним вызовом (если радиус совпадает) или отдельным вызовом (если радиус другой).
+   - Скругление ШВА после Union -> сначала merged.new_edges; если
+     список пуст/короче ожидаемого (деталь была присоединена вплотную)
+     -> attachment_seam(child, merged.body) или
+     edges_after_boolean(child, merged.body, ["имя1", ...]).
    - Следи, чтобы radius был заметно меньше самого маленького смежного
      размера (высоты детали, ширины грани и т.д.).
 
@@ -533,18 +508,6 @@ boss = plate.attach(
 merged = Union(workPart, plate, boss)
 seam = attachment_seam(boss, merged.body)
 Fillet(workPart, plate, seam, radius=1.0)
-
---- Пример 2b: приставка (boss) плашмя на плите, где нужно скруглить НЕ ТОЛЬКО шов, но и её собственные верхние рёбра - оба варианта ---
-
-Вариант А (рекомендуется, когда радиусы разные): скругляем top_edges
-босса ДО Union, пока boss.body ещё активен, а шов - после Union.
-
-base = Parallelogram(workPart, side_a=60.0, side_b=60.0, angle=90.0) plate = Extrude(workPart, [base], height=3.0, direction=(0.0,0.0,1.0)) boss = plate.attach( lambda f: rect_profile(workPart, f, length=20.0, width=20.0, u0=0.5, v0=0.5), thickness=6.0, frame=plate.center_frame(side='same'), ) Fillet(workPart, boss, boss.top_edges(), radius=1.0) # до Union - boss.body ещё активен merged = Union(workPart, plate, boss) seam = attachment_seam(boss, merged.body) Fillet(workPart, plate, seam, radius=1.0) # шов - только после Union, через attachment_seam
-
-Вариант Б (если радиус общий и хочется одним вызовом): top_edges
-и шов - оба ПОСЛЕ Union, top_edges - через edges_on (не find_edge).
-
-merged2 = Union(workPart, plate, boss) top = boss.edges_on(merged2.body, boss.top_edges()) # НЕ Fillet(workPart, boss, ...) - boss.body suppressed seam2 = attachment_seam(boss, merged2.body) Fillet(workPart, plate, top + seam2, radius=1.0)
 
 --- Пример 3: маленький прилив, торчащий НАРУЖУ от боковой грани
     (direction нужно явно перевернуть, т.к. anchor() по умолчанию
@@ -615,3 +578,139 @@ piece = box.attach(lambda f: rect_profile(workPart, f, 10, 10), thickness=2.0, f
 Это ПОСЛЕДНИЙ вариант — предпочитай anchor()/center_frame(), они уже
 считают направления автоматически и реже дают геометрически неверный
 результат.
+
+
+================================================================================
+PUBLIC API (сигнатуры + краткие описания, без реализации)
+Используй ТОЛЬКО то, что здесь перечислено.
+================================================================================
+
+class Profile:
+    # Базовый класс всех двумерных профилей.
+    def __init__(self, curves: list[NXOpen.Curve])
+
+class ClosedProfile:
+    # Базовый класс замкнутых плоских профилей (многоугольников).
+    def __init__(self, curves: list[NXOpen.Curve], vertices: list[tuple])
+    def corner_point(self, index: int, offset: float)
+        # Возвращает точку, смещённую на offset от вершины index
+
+class Line:
+    # Отрезок.
+    def __init__(self, workPart, start, end)
+    def on_frame(cls, workPart, frame, start_uv, end_uv)
+        # Отрезок в плоскости frame, заданный ЛОКАЛЬНЫМИ (u, v)
+
+class Circle:
+    # Окружность.
+    def __init__(self, workPart, radius, center=(0.0, 0.0), normal=(0.0, 0.0, 1.0))
+    def on_frame(cls, workPart, radius, frame, u=0.0, v=0.0)
+
+class Hide:
+    # Скрывает двумерные кривые профилей.
+    def __init__(self, session: NXOpen.Session, *profiles)
+
+class Frame:
+    # Локальная система координат в пространстве.
+    def __init__(self, origin, u, v, normal=None)
+    def point(self, u=0.0, v=0.0, w=0.0)
+    def points(self, local_xy)
+
+class Triangle:
+    # Треугольник.
+    def __init__(self, workPart, p1, p2, p3)
+    def by_3_sides(cls, workPart, side_a, side_b, side_c, center=(0.0, 0.0), frame=None)
+    def by_2_sides_and_angle(cls, workPart, side_a: float, side_b: float, angle_ab: float, center=(0.0, 0.0), frame=None)
+    def by_2_angles_and_side(cls, workPart, angle_a: float, angle_b: float, side_ab: float, center=(0.0, 0.0), frame=None)
+
+class Parallelogram:
+    def __init__(self, workPart, side_a, side_b, angle, center=(0.0, 0.0), frame=None)
+
+class Polygon:
+    # Многоугольник по явным 3D-вершинам.
+    def __init__(self, workPart, vertices: list)
+    def on_frame(cls, workPart, frame, local_vertices)
+
+def rect_profile(workPart, frame, length, width, u0: float=0.0, v0: float=0.0)
+    # Прямоугольник length x width на заданном Frame.
+
+def edges_in_box(body, p_min, p_max)
+    # Ищет рёбра тела, ЦЕЛИКОМ лежащие внутри осевого параллелепипеда
+
+def edges_near(body, point, tol=1.0)
+    # Ищет рёбра тела, СЕРЕДИНА которых находится в пределах tol от point.
+
+class Extrude:
+    # Вытягивание одного или нескольких профилей.
+    def __init__(self, workPart, profiles: list[Profile], height: float, direction=(0.0, 0.0, 1.0))
+    def bottom_edges(self, profile_index: int=0)
+        # Список имён ВСЕХ рёбер нижнего контура ("ab", "bc", ...) в
+    def top_edges(self, profile_index: int=0)
+        # Список имён ВСЕХ рёбер верхнего контура ("a1b1", "b1c1", ...)
+    def vertical_edges(self, profile_index: int=0)
+        # Список имён ВСЕХ вертикальных рёбер ("aa1", "bb1", ...).
+    def contact_edges(self, profile_index: int=0)
+        # Контур примыкания для детали, присоединённой СБОКУ через
+    def inward_direction(self, edge_name: str)
+        # Возвращает единичный вектор направления "внутрь" — от середины
+    def interior_direction(self, edge_name, profile_index=0)
+        # Направление ОТ ребра ВНУТРЬ этого тела. Не зависит от rise/grow
+    def find_edge(self, name: str, profile_index: int=0)
+        # Возвращает объект NXOpen.Edge по имени ребра.
+    def edge_points(self, name: str, profile_index: int=0)
+        # Возвращает пару 3D-точек (начало, конец) ребра по его имени.
+    def edge_frame(self, edge_name, profile_index=0, rise=None)
+    def attach_plate(self, edge_name, length, width, thickness, rise='same', grow='auto', overlap='auto', profile_index=0, holes=None)
+    def vertex(self, name: str, profile_index: int=0)
+        # Точка в 3D по имени вершины ("a", "b1", "c", ...).
+    def anchor(self, edge_name, profile_index: int=0, t: float=0.0, offset: float=0.0, angle: float=0.0, lift: float=0.0)
+        # Frame в произвольной точке РЕБРА — для деталей, растущих ОТ ребра
+    def center_frame(self, profile_index: int=0, side: str='same', spin: float=0.0, du: float=0.0, dv: float=0.0, lift=None)
+        # Frame для деталей, лежащих ПЛАШМЯ на грани целиком (не на ребре).
+    def attach(self, build, thickness: float, frame=None, edge_name=None, profile_index: int=0, t: float=0.0, offset: float=0.0, angle: float=0.0, lift: float=0.0, direction=None, holes=None)
+        # Универсальное присоединение ЛЮБОЙ фигуры к этому телу.
+
+class Fillet:
+    # Скругление рёбер тела.
+    def __init__(self, workPart, extrude: Extrude, edges: list, radius: float)
+
+class Boolean:
+    # Булева операция над телами: объединение, вычитание, пересечение.
+    def __init__(self, workPart, target, tools, kind='unite', tolerance=0.01)
+
+class Union:
+    def __init__(self, workPart, target, tools, tolerance=0.01)
+
+class Subtract:
+    def __init__(self, workPart, target, tools, tolerance=0.01)
+
+class Intersect:
+    def __init__(self, workPart, target, tools, tolerance=0.01)
+
+def attachment_seam(child: Extrude, parent_body, profile_index: int=0, ring: str='bottom')
+    # Рёбра шва для детали, присоединённой ВПЛОТНУЮ (через attach() /
+
+def edges_after_boolean(child: Extrude, target_body, edge_names, profile_index: int=0)
+    # Обобщение attachment_seam: ищет на target_body рёбра child
+
+================================================================================
+END OF API
+================================================================================
+
+
+================================================================================
+USER REQUEST
+================================================================================
+
+Пластина 70×40×3. От двух противоположных длинных рёбер поставить две стенки высотой 15 и толщиной 4. Объединить всё. Скруглить швы радиусом 1.
+
+
+================================================================================
+IMPORTANT
+
+Return ONLY executable Python code.
+Do NOT explain anything.
+Do NOT use Markdown.
+Do NOT wrap the code with ```.
+The answer must consist ONLY of Python code.
+================================================================================

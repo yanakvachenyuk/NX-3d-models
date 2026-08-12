@@ -8,7 +8,7 @@ import NXOpen.GeometricUtilities
 
 from .base import Profile, ClosedProfile
 from .geometry import _add, _subtract, _scale, _normalize3, _cross, Frame
-from .shapes import Polygon
+from .shapes import Polygon, Triangle, Parallelogram
 
 
 _LABELS = "abcdefghijklmnopqrstuvwxyz"
@@ -42,25 +42,158 @@ def _parse_edge_name(name, labels):
     raise ValueError(f"Не удалось разобрать имя ребра: {name}")
 
 
+def _body_edge_endpoints(edge):
+    vertices = edge.GetVertices()
+    if len(vertices) != 2:
+        return None
+    v1 = (vertices[0].X, vertices[0].Y, vertices[0].Z)
+    v2 = (vertices[1].X, vertices[1].Y, vertices[1].Z)
+    return v1, v2
+
+
+def _get_body_edges_safe(body):
+    """
+    Обёртка над body.GetEdges(), которая превращает крипто-ошибку NX
+    "Операция, запрещенная на подавленном объекте" в понятное сообщение.
+
+    ПОЧЕМУ ЭТО НУЖНО: после Union/Subtract/Intersect тело, переданное
+    как `tools`, физически ПОГЛОЩАЕТСЯ в target и становится SUPPRESSED.
+    Любая попытка вызвать body.GetEdges() (а значит и find_edge, и любой
+    Fillet(workPart, это_тело, ...)) на таком теле после операции падает
+    с малопонятной ошибкой NX. Эта функция даёт явную подсказку, что
+    делать вместо этого - использовать edges_after_boolean/
+    attachment_seam/Extrude.edges_on(), которые ищут рёбра по заранее
+    сохранённым координатам вершин на РЕЗУЛЬТИРУЮЩЕМ теле (merged.body),
+    а не на теле-инструменте.
+    """
+    try:
+        return body.GetEdges()
+    except NXOpen.NXException as e:
+        raise ValueError(
+            "Не удалось получить рёбра тела - похоже, это тело УЖЕ "
+            "SUPPRESSED (типичная причина: оно было передано как `tools` "
+            "в Union/Subtract/Intersect и физически поглощено в target - "
+            "это происходит с ЛЮБЫМ телом-инструментом сразу после "
+            "булевой операции). "
+            "Если это тело участвовало в булевой операции - ищите его "
+            "рёбра НЕ через Fillet(workPart, это_тело, ...) и НЕ через "
+            "это_тело.find_edge(...), а через один из способов: "
+            "edges_after_boolean(это_тело, merged.body, [имена]), "
+            "attachment_seam(это_тело, merged.body), или "
+            "это_тело.edges_on(merged.body, [имена]) - все они используют "
+            "заранее сохранённые координаты вершин (profile_labels), а не "
+            "GetEdges() самого тела, поэтому suppressed-статус для них не "
+            "проблема. Альтернатива - сделать нужный Fillet ДО Union, пока "
+            "тело ещё не подавлено. "
+            f"Исходная ошибка NX: {e}"
+        ) from e
+
+
 def _find_body_edge(body, p1, p2, tol=1e-3):
     """
     Ищет ребро тела, соединяющее точки p1 и p2 (в любом порядке).
+
+    Сначала пробует точное совпадение по обеим конечным точкам.
+
+    Если оно не найдено — типичная причина: соседняя операция (обычно
+    Fillet на смежном ребре/вершине) УКОРОТИЛА это ребро с одного или
+    обоих концов примерно на величину радиуса скругления. Величина
+    усечения задаётся радиусом, который find_edge не знает заранее и
+    который может быть сколь угодно большим (не долями мм, а вплоть до
+    десятков мм) — поэтому сравнивать по midpoint+длине с маленьким
+    допуском НЕНАДЁЖНО (ровно так ломался предыдущий вариант fallback).
+
+    Вместо этого используется геометрически более устойчивый признак:
+    усечённое скруглением ребро остаётся КОЛЛИНЕАРНО исходному (лежит
+    на той же прямой) и является его ПОДОТРЕЗКОМ (после проекции на
+    исходное направление обе точки нового ребра попадают внутрь
+    исходного отрезка, независимо от того, насколько сильно тот был
+    обрезан с концов). Среди всех кандидатов на этой прямой выбирается
+    тот, что даёт наибольшее перекрытие с исходным отрезком.
     """
-    for edge in body.GetEdges():
+    all_edges = _get_body_edges_safe(body)
 
-        vertices = edge.GetVertices()
+    for edge in all_edges:
 
-        if len(vertices) != 2:
+        endpoints = _body_edge_endpoints(edge)
+        if endpoints is None:
             continue
 
-        v1 = (vertices[0].X, vertices[0].Y, vertices[0].Z)
-        v2 = (vertices[1].X, vertices[1].Y, vertices[1].Z)
+        v1, v2 = endpoints
 
         if (_points_equal(v1, p1, tol) and _points_equal(v2, p2, tol)) or \
            (_points_equal(v1, p2, tol) and _points_equal(v2, p1, tol)):
             return edge
 
-    raise ValueError(f"Не найдено ребро между точками {p1} и {p2}")
+    # --- fallback: точный матч не найден ---
+    edge_vec = _subtract(p2, p1)
+    target_len = sqrt(sum(c ** 2 for c in edge_vec))
+
+    if target_len < 1e-9:
+        raise ValueError(f"Вырожденное ребро: {p1} и {p2} совпадают.")
+
+    direction = _scale(edge_vec, 1.0 / target_len)
+    perp_tol = max(tol * 50, 0.5)   # допуск на отклонение от исходной прямой
+    span_tol = max(tol * 50, 0.5)   # допуск на выход проекции за пределы [0, target_len]
+
+    best_edge = None
+    best_overlap = None
+
+    for edge in all_edges:
+
+        endpoints = _body_edge_endpoints(edge)
+        if endpoints is None:
+            continue
+
+        v1, v2 = endpoints
+
+        seg = _subtract(v2, v1)
+        seg_len = sqrt(sum(c ** 2 for c in seg))
+        if seg_len < 1e-9:
+            continue
+
+        seg_dir = _scale(seg, 1.0 / seg_len)
+
+        # коллинеарность: |dot| близко к 1 (направление то же или противоположное)
+        dot = sum(a * b for a, b in zip(direction, seg_dir))
+        if abs(dot) < 0.999:
+            continue
+
+        # обе точки кандидата должны лежать на исходной прямой, а не
+        # просто быть параллельны ей где-то в стороне
+        to_v1 = _subtract(v1, p1)
+        proj1 = sum(a * b for a, b in zip(to_v1, direction))
+        perp1 = sqrt(max(0.0, sum(c ** 2 for c in to_v1) - proj1 ** 2))
+        if perp1 > perp_tol:
+            continue
+
+        to_v2 = _subtract(v2, p1)
+        proj2 = sum(a * b for a, b in zip(to_v2, direction))
+        perp2 = sqrt(max(0.0, sum(c ** 2 for c in to_v2) - proj2 ** 2))
+        if perp2 > perp_tol:
+            continue
+
+        lo, hi = min(proj1, proj2), max(proj1, proj2)
+
+        # кандидат должен лежать (почти) внутри исходного отрезка [0, target_len],
+        # а не быть соседним отрезком той же бесконечной прямой
+        if lo < -span_tol or hi > target_len + span_tol:
+            continue
+
+        overlap = hi - lo
+        if best_overlap is None or overlap > best_overlap:
+            best_edge = edge
+            best_overlap = overlap
+
+    if best_edge is not None:
+        return best_edge
+
+    raise ValueError(
+        f"Не найдено ребро между точками {p1} и {p2} (в т.ч. по fallback-"
+        f"поиску по коллинеарности/проекции). Возможно, геометрия изменилась "
+        f"сильнее ожидаемого после предыдущей операции Fillet/Boolean над "
+        f"смежной вершиной или гранью."
+    )
 
 
 def rect_profile(workPart, frame, length, width, u0: float = 0.0, v0: float = 0.0):
@@ -98,14 +231,13 @@ def edges_in_box(body, p_min, p_max):
     Boolean.new_edges — см. класс Boolean ниже.
     """
     result = []
-    for edge in body.GetEdges():
-        vertices = edge.GetVertices()
-        if len(vertices) != 2:
+    for edge in _get_body_edges_safe(body):
+        endpoints = _body_edge_endpoints(edge)
+        if endpoints is None:
             continue
         ok = True
-        for v in vertices:
-            p = (v.X, v.Y, v.Z)
-            if not all(lo <= c <= hi for c, lo, hi in zip(p, p_min, p_max)):
+        for v in endpoints:
+            if not all(lo <= c <= hi for c, lo, hi in zip(v, p_min, p_max)):
                 ok = False
                 break
         if ok:
@@ -119,12 +251,11 @@ def edges_near(body, point, tol=1.0):
     Альтернатива edges_in_box - удобна, когда легче указать одну точку.
     """
     result = []
-    for edge in body.GetEdges():
-        vertices = edge.GetVertices()
-        if len(vertices) != 2:
+    for edge in _get_body_edges_safe(body):
+        endpoints = _body_edge_endpoints(edge)
+        if endpoints is None:
             continue
-        v1 = (vertices[0].X, vertices[0].Y, vertices[0].Z)
-        v2 = (vertices[1].X, vertices[1].Y, vertices[1].Z)
+        v1, v2 = endpoints
         mid = tuple((a + b) / 2 for a, b in zip(v1, v2))
         dist = sqrt(sum((m - p) ** 2 for m, p in zip(mid, point)))
         if dist <= tol:
@@ -343,6 +474,97 @@ class Extrude:
 
         return labels
 
+    def _profile_vertex_names(self, profile_index=0):
+        """
+        Возвращает (список нижних буквенных имён в порядке обхода,
+        число вершин) для указанного профиля. Служебный метод для
+        bottom_edges/top_edges/vertical_edges.
+        """
+        labels = self.profile_labels[profile_index]
+
+        if not labels:
+            raise ValueError(
+                f"Буквенная разметка недоступна для профиля с индексом {profile_index}."
+            )
+
+        names = sorted(
+            (n for n in labels if not n.endswith("1")),
+            key=lambda n: _LABELS.index(n)
+        )
+
+        return names, len(names)
+
+    def bottom_edges(self, profile_index: int = 0):
+        """
+        Список имён ВСЕХ рёбер нижнего контура ("ab", "bc", ...) в
+        порядке обхода — для профиля любого числа сторон. Удобнее
+        и надёжнее, чем перечислять имена вручную (не нужно знать
+        заранее, сколько вершин у контура).
+        """
+        names, n = self._profile_vertex_names(profile_index)
+        return [names[i] + names[(i + 1) % n] for i in range(n)]
+
+    def top_edges(self, profile_index: int = 0):
+        """
+        Список имён ВСЕХ рёбер верхнего контура ("a1b1", "b1c1", ...)
+        в порядке обхода.
+        """
+        names, n = self._profile_vertex_names(profile_index)
+        return [
+            names[i] + "1" + names[(i + 1) % n] + "1"
+            for i in range(n)
+        ]
+
+    def vertical_edges(self, profile_index: int = 0):
+        """
+        Список имён ВСЕХ вертикальных рёбер ("aa1", "bb1", ...).
+        """
+        names, _ = self._profile_vertex_names(profile_index)
+        return [name + name + "1" for name in names]
+
+    def contact_edges(self, profile_index: int = 0):
+        """
+        Контур примыкания для детали, присоединённой СБОКУ через
+        anchor(edge_name, angle=-90/0/180) + attach(build=rect_profile(...,
+        v0=0.0), ...) — т.е. когда деталь РАСТЁТ ОТ РЕБРА родителя, а не
+        лежит плашмя на его грани целиком.
+
+        ВАЖНО: это НЕ то же самое, что attachment_seam(ring="bottom")!
+        attachment_seam(ring="bottom") предполагает, что контакт — это
+        ВЕСЬ нижний контур детали (верно для boss/платформы, посаженных
+        плашмя через center_frame). Для бокового примыкания это неверно:
+        нижний контур детали в этом случае — это её "пол" (a,b,c,d), а
+        реальная зона контакта с родителем — только ОДНА грань (та, что
+        лежит в плоскости v=0 у anchor-frame'а).
+
+        Метод предполагает СТАНДАРТНУЮ конвенцию построения такой
+        детали: rect_profile(workPart, frame, length, width, v0=0.0) —
+        тогда вершины a,b (первые две) всегда лежат В ПЛОСКОСТИ СТЫКА
+        (frame.origin), и реальный контур примыкания — это
+        ["ab", "aa1", "bb1", "a1b1"]: нижнее ребро на стыке, обе
+        ближние вертикали и верхнее ребро на стыке. Дальние рёбра
+        (bc, cd, da, cc1, dd1, b1c1, c1d1, d1a1) к родителю не
+        относятся — это "свободные" грани самой детали.
+
+        Если деталь НЕ прямоугольная (Polygon с произвольным контуром)
+        или построена НЕ с v0=0.0 — этот метод НЕ подходит, определяйте
+        контур примыкания вручную по факту построения build-функции.
+
+        Использование (после Union):
+            addon = box.attach(..., frame=box.anchor("ab", angle=-90.0))
+            merged = Union(workPart, box, addon)
+            contact = edges_after_boolean(addon, merged.body, addon.contact_edges())
+            Fillet(workPart, box, contact, radius=1.0)
+        """
+        names, n = self._profile_vertex_names(profile_index)
+        if n < 4:
+            raise ValueError(
+                "contact_edges() рассчитан на 4-вершинный (прямоугольный) "
+                "профиль, построенный через rect_profile(v0=0.0)."
+            )
+        a, b = names[0], names[1]
+        return [a + b, a + a + "1", b + b + "1", a + "1" + b + "1"]
+
     def inward_direction(self, edge_name: str):
         """
         Возвращает единичный вектор направления "внутрь" — от середины
@@ -415,6 +637,11 @@ class Extrude:
         profile_index — индекс профиля в списке, переданном в Extrude:
         0 — внешний контур (по умолчанию), 1, 2, ... — отверстия
         в порядке их передачи.
+
+        ВАЖНО: работает только пока self.body НЕ suppressed. Если это
+        тело было передано как `tools` в Union/Subtract/Intersect - оно
+        подавляется сразу после операции, и find_edge на нём больше не
+        работает (см. edges_on() ниже для этого случая).
         """
 
         if profile_index >= len(self.profile_labels):
@@ -430,6 +657,37 @@ class Extrude:
         l1, l2 = _parse_edge_name(name, labels.keys())
 
         return _find_body_edge(self.body, labels[l1], labels[l2])
+
+    def edges_on(self, body, names, profile_index: int = 0):
+        """
+        Ищет рёбра ЭТОГО профиля (по именам, например top_edges() или
+        vertical_edges()) на ПРОИЗВОЛЬНОМ теле body - а не на self.body.
+
+        ЗАЧЕМ: после Union/Subtract/Intersect тело, переданное как
+        `tools` (например деталь, присоединённая через attach()),
+        физически ПОГЛОЩАЕТСЯ в target и становится SUPPRESSED. Любой
+        Fillet(workPart, это_тело, [...], radius) или
+        это_тело.find_edge(...) после такой операции упадёт с ошибкой
+        NX "Операция, запрещенная на подавленном объекте" - потому что
+        self.body для них больше не является активным телом модели.
+
+        edges_on() не использует self.body вовсе - только заранее
+        сохранённые координаты вершин (self.profile_labels) - и ищет
+        их на РЕЗУЛЬТИРУЮЩЕМ теле (обычно merged.body). Поэтому
+        suppressed-статус исходного тела для него не проблема.
+
+        Это метод-обёртка над свободной функцией edges_after_boolean -
+        используйте любую форму, они эквивалентны:
+            boss.edges_on(merged.body, boss.top_edges())
+            edges_after_boolean(boss, merged.body, boss.top_edges())
+
+        Пример - скругление верхних рёбер боковой детали ПОСЛЕ Union:
+            merged = Union(workPart, plate, boss)
+            top = boss.edges_on(merged.body, boss.top_edges())
+            seam = attachment_seam(boss, merged.body)
+            Fillet(workPart, plate, top + seam, radius=1.0)
+        """
+        return edges_after_boolean(self, body, names, profile_index)
 
     def edge_points(self, name: str, profile_index: int = 0):
         """
@@ -642,6 +900,16 @@ class Fillet:
         Объект, через который ищутся рёбра по имени (нужен только для
         элементов-СТРОК/кортежей в edges; для готовых NXOpen.Edge не
         используется).
+
+        ВАЖНО: extrude.body должен быть АКТИВНЫМ (не suppressed) телом.
+        Если тело участвовало как `tools` в Union/Subtract/Intersect -
+        оно подавляется сразу после операции, и передавать его сюда
+        напрямую больше нельзя. В этом случае сначала получите готовые
+        NXOpen.Edge через extrude.edges_on(merged.body, names) /
+        edges_after_boolean(...) / attachment_seam(...), а вторым
+        аргументом передайте ЛЮБОЙ ДРУГОЙ активный Extrude (например
+        target, `plate`) - он используется только как "якорь" для
+        готовых Edge, поиск по имени для них не выполняется.
     edges : list
         Список, где каждый элемент может быть:
         - строкой "ab"            -> ребро внешнего контура (индекс профиля 0)
@@ -653,6 +921,27 @@ class Fillet:
         Строки/кортежи и готовые Edge можно свободно смешивать в одном списке.
     radius : float
         Радиус скругления.
+
+    МОЖНО делать НЕСКОЛЬКО последовательных вызовов Fillet на одном и
+    том же extrude с разными группами рёбер и разными радиусами (например
+    сначала вертикальные рёбра радиусом 2, затем верхний контур радиусом
+    1) — find_edge сам находит актуальное положение рёбер даже после
+    того, как предыдущий Fillet изменил геометрию у общих вершин.
+
+    ВАЖНО про радиус: он должен быть ЗАМЕТНО МЕНЬШЕ, чем самая короткая
+    из смежных с ребром размеров (высота детали, ширина грани и т.п.).
+    Если radius >= высоты/толщины детали, в которой лежит ребро — NX,
+    скорее всего, откажется строить скругление с ошибкой вида
+    "невозможно ограничить грань скругления". Если это случилось —
+    в СЛЕДУЮЩЕЙ попытке возьми радиус заметно меньше (например вдвое).
+
+    ВАЖНО: если ДВЕ группы рёбер (например vertical_edges присоединённой
+детали и рёбра шва) ДЕЛЯТ ОБЩИЕ ВЕРШИНЫ и скругляются ОДНИМ радиусом —
+их нужно передать в ОДИН вызов Fillet(workPart, extrude, group1+group2,
+radius), а НЕ в раздельные последовательные вызовы. Раздельные вызовы
+на общих вершинах вызывают ошибку NX "Невозможно ограничить грань
+скругления" — это не значит, что не хватает ещё одного ребра другого
+типа, это значит, что рёбра нужно объединить в один вызов.
     """
 
     def __init__(
@@ -766,6 +1055,23 @@ class Boolean:
         self.removed_edges_count - сколько рёбер пропало (для справки/
                                     отладки, например если общая грань
                                     исчезла)
+
+    ВАЖНО (частый источник ошибок): сразу ПОСЛЕ этой операции тело(а),
+    переданные как `tools`, становятся SUPPRESSED - NX физически
+    поглощает их в target. Это означает:
+      - tools.body.GetEdges() и всё, что на нём основано (find_edge,
+        Fillet(workPart, tools, [...], radius)), больше не работает и
+        падает с ошибкой NX "Операция, запрещенная на подавленном объекте".
+      - Это касается ЛЮБЫХ рёбер tools, не только шва - в т.ч.
+        tools.top_edges()/bottom_edges()/vertical_edges(), если их
+        нужно скруглить ПОСЛЕ Union.
+      - Если такие рёбра нужны - используйте
+        tools.edges_on(merged.body, names) / edges_after_boolean(...) /
+        attachment_seam(...) - они ищут рёбра по заранее сохранённым
+        координатам НА РЕЗУЛЬТИРУЮЩЕМ теле (merged.body), а не через
+        само tools.body.
+      - Либо сделайте нужный Fillet на tools ДО вызова Union/Subtract/
+        Intersect, пока тело ещё активно.
     """
 
     _KIND_MAP = {
@@ -780,6 +1086,11 @@ class Boolean:
 
         target_bodies = _as_bodies(target)
         tool_bodies = _as_bodies(tools)
+
+        if not target_bodies:
+            raise ValueError("Boolean: target не содержит ни одного тела.")
+        if not tool_bodies:
+            raise ValueError("Boolean: tools не содержит ни одного тела.")
 
         # запоминаем рёбра ДО операции, пока оба тела ещё существуют
         before_sigs = _edge_signatures(target_bodies) | _edge_signatures(tool_bodies)
@@ -891,12 +1202,19 @@ def attachment_seam(child: Extrude, parent_body, profile_index: int = 0, ring: s
             pass
     return result
 
+
 def edges_after_boolean(child: Extrude, target_body, edge_names, profile_index: int = 0):
     """
     Обобщение attachment_seam: ищет на target_body рёбра child
     по ИМЕНАМ (посчитанным ДО boolean-операции), а не только целое
     кольцо. Рёбра, которые после объединения слились и перестали
     существовать отдельно, тихо пропускаются - как в attachment_seam.
+
+    Это ОСНОВНОЙ способ получить рёбра тела-инструмента (tools) ПОСЛЕ
+    Union/Subtract/Intersect, когда его собственное .body уже suppressed -
+    в т.ч. для рёбер, НЕ являющихся швом (например top_edges() детали,
+    присоединённой сбоку). См. также Extrude.edges_on() - метод-обёртка
+    над этой же функцией.
     """
     result = []
     for name in edge_names:
