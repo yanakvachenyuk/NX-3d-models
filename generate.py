@@ -23,7 +23,7 @@ SYSTEM_PROMPT = PROMPTS_DIR / "system_prompt.txt"
 OUTPUT_FILE = GENERATED_DIR / "result.py"
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "qwen2.5-coder:7b"
+MODEL = "qwen3-coder:30b-a3b-q4_K_M"
 
 RESULT_PREFIX = f"""import sys
 import os
@@ -224,15 +224,15 @@ def cleanup_response(text: str) -> str:
 
 
 def generate(prompt: str) -> str:
-    payload = {"model": MODEL, "prompt": prompt, "stream": False}
-    # payload = {
-    #     "model": MODEL,
-    #     "prompt": prompt,
-    #     "stream": False,
-    #     "options": {
-    #         "num_ctx": 16384,  # с запасом под реальный размер вашего промпта
-    #     }
-    # }
+    # payload = {"model": MODEL, "prompt": prompt, "stream": False}
+    payload = {
+        "model": MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "num_ctx": 16384,  # с запасом под реальный размер вашего промпта
+        }
+    }
     response = requests.post(OLLAMA_URL, json=payload, timeout=600)
     response.raise_for_status()
     data = response.json()

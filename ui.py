@@ -52,7 +52,7 @@ class ui:
         try:
             self.theSession = NXOpen.Session.GetSession()
             self.theUI = NXOpen.UI.GetUI()
-            self.theDlxFileName = r"C:\Users\user\Desktop\AI_3D_NX_python_optimization_project\ui.dlx"
+            self.theDlxFileName = r"C:\Users\Chelik\NX-3d-models\ui.dlx"
             self.theDialog = self.theUI.CreateDialog(self.theDlxFileName)
             self.theDialog.AddApplyHandler(self.apply_cb)
             self.theDialog.AddOkHandler(self.ok_cb)
@@ -187,9 +187,9 @@ class ui:
                     listing.WriteLine("Генерация запущена, ждите ответа от нейронки...")
                     listing.WriteLine("(может занять 1-3 минуты на локальной модели)")
 
-                    python_exe = r"C:\Users\user\AppData\Local\Microsoft\WindowsApps\python.exe"
-                    generate_script = r"C:\Users\user\Desktop\AI_3D_NX_python_optimization_project\generate.py"
-                    result_path = r"C:\Users\user\Desktop\AI_3D_NX_python_optimization_project\generated\result.py"
+                    python_exe = r"C:\Python313\python.exe"
+                    generate_script = r"C:\Users\Chelik\NX-3d-models\generate.py"
+                    result_path = r"C:\Users\Chelik\NX-3d-models\generated\result.py"
 
                     proc = subprocess.run(
                         [python_exe, generate_script, user_request],
