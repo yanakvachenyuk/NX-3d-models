@@ -1,0 +1,206 @@
+======================================================================
+ПРИМЕРЫ (следуй этим паттернам буквально)
+======================================================================
+--- Пример 1: пластина + одна стенка (attach_plate) + шов new_edges ---
+base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
+plate = Extrude(workPart, [base], height=3.0, direction=(0.0, 0.0, 1.0))
+wall = plate.attach_plate("ab", length=None, width=20.0, thickness=3.0)
+merged = Union(workPart, plate, wall)
+Fillet(workPart, plate, merged.new_edges, radius=1.0)
+--- Пример 1b: пластина + две стенки на длинных рёбрах ---
+base = Parallelogram(workPart, side_a=70.0, side_b=40.0, angle=90.0)
+plate = Extrude(workPart, [base], height=3.0, direction=(0.0, 0.0, 1.0))
+# width=15 — высота; thickness=4 — толщина
+wall_ab = plate.attach_plate("ab", length=None, width=15.0, thickness=4.0)
+wall_cd = plate.attach_plate("cd", length=None, width=15.0, thickness=4.0)
+merged = Union(workPart, plate, wall_ab, wall_cd)
+# attach_plate → шов new_edges; Fillet только на plate
+Fillet(workPart, plate, merged.new_edges, radius=1.0)
+--- Пример 2: босс плашмя (паттерн A) ---
+base = Parallelogram(workPart, side_a=60.0, side_b=60.0, angle=90.0)
+plate = Extrude(workPart, [base], height=3.0, direction=(0.0, 0.0, 1.0))
+boss = plate.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=20.0, u0=0.5, v0=0.5),
+    thickness=3.0,
+    frame=plate.center_frame(side='same'),
+)
+merged = Union(workPart, plate, boss)
+seam = attachment_seam(boss, merged.body)
+Fillet(workPart, plate, seam, radius=1.0)
+--- Пример 2b: босс + top_edges до Union, шов после ---
+base = Parallelogram(workPart, side_a=60.0, side_b=60.0, angle=90.0)
+plate = Extrude(workPart, [base], height=3.0, direction=(0.0, 0.0, 1.0))
+boss = plate.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=20.0, u0=0.5, v0=0.5),
+    thickness=6.0,
+    frame=plate.center_frame(side='same'),
+)
+Fillet(workPart, boss, boss.top_edges(), radius=1.0)
+merged = Union(workPart, plate, boss)
+seam = attachment_seam(boss, merged.body)
+Fillet(workPart, plate, seam, radius=1.0)
+--- Пример 2c: три босса на верхней грани со смещением и отверстиями ---
+base = Parallelogram(workPart, side_a=100.0, side_b=60.0, angle=90.0)
+plate = Extrude(workPart, [base], height=5.0, direction=(0.0, 0.0, 1.0))
+boss_c = plate.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=20.0, u0=0.5, v0=0.5),
+    thickness=6.0,
+    frame=plate.center_frame(side='same'),
+    holes=[lambda f: Circle.on_frame(workPart, 4.0, f, u=0.0, v=0.0)],
+)
+boss_l = plate.attach(
+    lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
+    thickness=4.0,
+    frame=plate.center_frame(side='same', du=-30.0),
+    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)],
+)
+boss_r = plate.attach(
+    lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
+    thickness=4.0,
+    frame=plate.center_frame(side='same', du=30.0),
+    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)],
+)
+--- Пример 3: прилив наружу от грани ---
+base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
+box = Extrude(workPart, [base], height=15.0, direction=(0.0, 0.0, 1.0))
+frame = box.anchor("ab", offset=8.0, angle=0.0)
+outward = tuple(-c for c in frame.normal)
+tab = box.attach(
+    lambda f: rect_profile(workPart, f, length=8.0, width=10.0, u0=0.0, v0=0.0),
+    thickness=7.0,
+    frame=frame,
+    direction=outward,
+)
+--- Пример 4: второй параллелепипед рядом (angle=-90) ---
+base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
+box = Extrude(workPart, [base], height=15.0, direction=(0.0, 0.0, 1.0))
+frame = box.anchor("ab", offset=8.0, angle=-90.0)
+def small_profile(f):
+    l, w = 8.0, 10.0
+    pts = [(l, w), (0.0, w), (0.0, 0.0), (l, 0.0)]
+    return Polygon.on_frame(workPart, f, pts)
+small = box.attach(
+    small_profile,
+    thickness=4.0,
+    frame=frame,
+    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=4.0, v=4.0)],
+)
+Fillet(workPart, small, ["aa1", "bb1"], radius=1.5)
+--- Пример 4b: отверстие от центра ---
+base = Parallelogram(workPart, side_a=30.0, side_b=30.0, angle=90.0)
+hole = Circle(workPart, radius=6.0, center=base.point_from_center())
+plate = Extrude(workPart, [base, hole], height=5.0)
+--- Пример 5: отверстие при построении ---
+base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
+hole = Circle(workPart, radius=5.0, center=base.point_from_center(15.0, 10.0))
+plate = Extrude(workPart, [base, hole], height=3.0, direction=(0.0, 0.0, 1.0))
+--- Пример 5b: произвольный многоугольник (Polygon) + отверстие в центре ---
+vertices = [(0, 0), (20, 6.93), (34.64, 20), (20, 34.64), (0, 27.68), (-14.64, 20)]
+hexagon = Polygon(workPart, vertices)
+# point_from_center() считает центр как среднее ВСЕХ вершин hexagon -
+# НЕ (0.0, 0.0): вершины заданы от угла, а не симметрично вокруг нуля.
+hole = Circle(workPart, radius=3.0, center=hexagon.point_from_center())
+base = Extrude(workPart, [hexagon, hole], height=6.0, direction=(0.0, 0.0, 1.0))
+--- Пример 6: два радиуса на одном теле ---
+base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
+box = Extrude(workPart, [base], height=10.0, direction=(0.0, 0.0, 1.0))
+Fillet(workPart, box, box.vertical_edges(), radius=2.0)
+Fillet(workPart, box, box.top_edges(), radius=1.0)
+--- Пример 7 (анти): отступ + только вперёд ---
+# НЕПРАВИЛЬНО: t=мм/длина, lambda без f, лишний Extrude
+# ПРАВИЛЬНО:
+base = Parallelogram(workPart, side_a=50.0, side_b=30.0, angle=90.0)
+big_box = Extrude(workPart, [base], height=12.0, direction=(0.0, 0.0, 1.0))
+frame = big_box.anchor("ab", offset=6.0, angle=-90.0)
+small_box = big_box.attach(
+    lambda f: rect_profile(workPart, f, length=10.0, width=8.0, u0=0.0, v0=0.0),
+    thickness=5.0,
+    frame=frame,
+    # length=10.0 совпадает с length у rect_profile выше — center_hole
+    # сама считает u=length/2 и v=distance_from_seam+radius
+    holes=[center_hole(workPart, radius=2.0, length=10.0, distance_from_seam=3.0)],
+)
+--- Пример 8 (анти): center_frame без frame= в attach ---
+# ПРАВИЛЬНО:
+boss = bottom_plate.attach(
+    lambda f: rect_profile(workPart, f, length=30.0, width=20.0, u0=0.5, v0=0.5),
+    thickness=8.0,
+    frame=bottom_plate.center_frame(side='same'),
+)
+merged = Union(workPart, bottom_plate, boss)
+seam = attachment_seam(boss, merged.body)
+Fillet(workPart, bottom_plate, seam, radius=1.5)
+--- Пример 9 (анти): смешивание паттернов / Fillet на merged ---
+# НЕПРАВИЛЬНО: anchor + v0=0.5 + attachment_seam + Fillet(merged)
+# ПРАВИЛЬНО для «отступ + только вперёд»:
+base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
+big_box = Extrude(workPart, [base], height=15.0, direction=(0.0, 0.0, 1.0))
+frame = big_box.anchor("ab", offset=8.0, angle=-90.0)
+small_box = big_box.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=12.0, u0=0.0, v0=0.0),
+    thickness=10.0,
+    frame=frame,
+)
+merged = Union(workPart, big_box, small_box)
+names = list(dict.fromkeys(small_box.contact_edges() + small_box.vertical_edges()))
+small_edges = small_box.edges_on(merged.body, names)
+Fillet(workPart, big_box, small_edges + big_box.vertical_edges(), radius=1.0)
+--- Пример 10: отступ 4 мм, только вперёд, сбоку ---
+base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
+big_box = Extrude(workPart, [base], height=15.0, direction=(0.0, 0.0, 1.0))
+frame = big_box.anchor("ab", offset=4.0, angle=-90.0)
+small_box = big_box.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=12.0, u0=0.0, v0=0.0),
+    thickness=10.0,
+    frame=frame,
+)
+merged = Union(workPart, big_box, small_box)
+names = list(dict.fromkeys(small_box.contact_edges() + small_box.vertical_edges()))
+small_edges = small_box.edges_on(merged.body, names)
+Fillet(workPart, big_box, small_edges + big_box.vertical_edges(), radius=1.0)
+--- Пример 11: от середины, только в одну сторону ---
+base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
+big_box = Extrude(workPart, [base], height=15.0, direction=(0.0, 0.0, 1.0))
+frame = big_box.anchor("ab", t=0.5, angle=-90.0)
+small_box = big_box.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=12.0, u0=0.0, v0=0.0),
+    thickness=10.0,
+    frame=frame,
+)
+merged = Union(workPart, big_box, small_box)
+names = list(dict.fromkeys(small_box.contact_edges() + small_box.vertical_edges()))
+small_edges = small_box.edges_on(merged.body, names)
+Fillet(workPart, big_box, small_edges + big_box.vertical_edges(), radius=1.0)
+--- Пример 12: от середины, центрировать ---
+base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
+big_box = Extrude(workPart, [base], height=15.0, direction=(0.0, 0.0, 1.0))
+frame = big_box.anchor("ab", t=0.5, angle=-90.0)
+small_box = big_box.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=12.0, u0=0.5, v0=0.0),
+    thickness=10.0,
+    frame=frame,
+)
+merged = Union(workPart, big_box, small_box)
+names = list(dict.fromkeys(small_box.contact_edges() + small_box.vertical_edges()))
+small_edges = small_box.edges_on(merged.body, names)
+Fillet(workPart, big_box, small_edges + big_box.vertical_edges(), radius=1.0)
+--- Пример: пластина + отверстия в ряд ---
+base = Parallelogram(workPart, side_a=100.0, side_b=60.0, angle=90.0)
+holes = holes_in_row(workPart, base, radii=[3.0, 5.0, 7.0], gap=20.0, y=0.0)
+plate = Extrude(workPart, [base] + holes, height=5.0)
+--- Пример: отверстия по углам + центр (только point_from_center!) ---
+base = Parallelogram(workPart, side_a=80.0, side_b=80.0, angle=90.0)
+holes = [
+    Circle(workPart, radius=5.0, center=base.point_from_center(-30.0, -30.0)),
+    Circle(workPart, radius=5.0, center=base.point_from_center( 30.0, -30.0)),
+    Circle(workPart, radius=5.0, center=base.point_from_center(-30.0, 30.0)),
+    Circle(workPart, radius=5.0, center=base.point_from_center( 30.0, 30.0)),
+    Circle(workPart, radius=10.0, center=base.point_from_center(0.0, 0.0)),
+]
+plate = Extrude(workPart, [base] + holes, height=4.0)
+======================================================================
+КОГДА НУЖНО РУЧНОЕ УПРАВЛЕНИЕ (редко)
+======================================================================
+p = box.vertex("b1")
+frame = Frame(origin=p, u=(1, 0, 0), v=(0, 0, 1), normal=(0, 1, 0))
+piece = box.attach(lambda f: rect_profile(workPart, f, 10, 10), thickness=2.0, frame=frame)

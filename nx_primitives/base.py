@@ -57,3 +57,16 @@ class ClosedProfile(Profile):
         dir_prev = _normalize3(_subtract(p_prev, p0))
 
         return _add(_add(p0, _scale(dir_next, offset)), _scale(dir_prev, offset))
+
+    def point_from_center(self, dx: float = 0.0, dy: float = 0.0):
+        """
+        Точка со смещением (dx, dy) ОТ ЦЕНТРА этого профиля (self.center),
+        а НЕ от (0,0). Профиль БЕЗ frame по умолчанию центрирован в (0,0),
+        но если передан center= или frame - центр может быть где угодно,
+        поэтому всегда используй ЭТОТ метод вместо самостоятельного счёта
+        координат. dx=0, dy=0 -> точно центр профиля (например, для
+        отверстия "точно в центре пластины"). dx/dy != 0 -> отступ от
+        центра, например side_a/2 - offset для отступа от края.
+        """
+        cx, cy = self.center[0], self.center[1]
+        return (cx + dx, cy + dy, self.center[2] if len(self.center) > 2 else 0.0)

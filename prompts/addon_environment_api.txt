@@ -1,0 +1,200 @@
+======================================================================
+ОКРУЖЕНИЕ
+======================================================================
+Session, workPart и все публичные имена из nx_primitives уже подставлены
+автоматически ДО твоего кода.
+В пространстве имён гарантированно доступны:
+Triangle, Parallelogram, Polygon, Circle, Line,
+  Extrude, Fillet, Union, Subtract, Intersect, Boolean,
+  Frame, Hide, rect_profile, center_hole,
+  attachment_seam, edges_after_boolean, edges_in_box, edges_near
+НЕ пиши:
+- import NXOpen
+- from nx_primitives import ...
+- theSession = NXOpen.Session.GetSession()
+- workPart = theSession.Parts.Work
+Начинай код сразу с построения геометрии.
+Можно свободно использовать:
+  Triangle.by_3_sides(...)
+  Triangle.by_2_sides_and_angle(...)
+  Triangle.by_2_angles_and_side(...)
+  rect_profile(...)
+  Parallelogram(...)
+  Polygon(...) / Polygon.on_frame(...)
+  Circle(...) / Circle.on_frame(...)
+  и все методы Extrude (anchor, center_frame, attach, attach_plate,
+  bottom_edges, top_edges, vertical_edges, edges_on и т.д.)
+Никогда не используй «голый» NXOpen напрямую.
+Всё строится ТОЛЬКО через классы и функции, перечисленные выше.
+======================================================================
+ЧТО ТАКОЕ Extrude И ПОЧЕМУ ОН ЦЕНТРАЛЬНЫЙ ОБЪЕКТ БИБЛИОТЕКИ
+======================================================================
+Любое тело в этой библиотеке строится в два шага:
+1. Строится плоский 2D-контур (Polygon / Circle / Triangle /
+   Parallelogram) — это ЛИНИИ, а не тело.
+2. Контур(ы) передаются в Extrude(workPart, [контур, ...], height,
+   direction) — это создаёт объёмное тело выдавливанием.
+Extrude(workPart, profiles, height, direction=(0,0,1))
+    profiles — список профилей. ПЕРВЫЙ — внешний контур тела.
+                ОСТАЛЬНЫЕ — вычитаемые контуры (отверстия) внутри него.
+    height — высота выдавливания (число, не строка).
+    direction — вектор (x,y,z), КУДА растёт тело от плоскости контура.
+                По умолчанию вверх (0,0,1).
+Результат — объект Extrude с полями и методами:
+    .body — NXOpen.Body (готовое тело)
+    .profiles — список переданных профилей
+    .height — высота (float)
+    .direction — направление выдавливания (tuple)
+    .profile_labels — список словарей {имя_вершины: 3D-точка},
+                          отдельный словарь на каждый профиль
+    .labels — то же что profile_labels[0]
+БУКВЕННАЯ РАЗМЕТКА ВЕРШИН:
+    Низ: a, b, c, d, ...
+    Верх: a1, b1, c1, d1, ...
+ИМЕНА РЁБЕР:
+    "ab", "bc", ... — низ
+    "a1b1", "b1c1", ... — верх
+    "aa1", "bb1", ... — вертикали
+Готовые списки:
+    extrude.bottom_edges()
+    extrude.top_edges()
+    extrude.vertical_edges()
+    extrude.contact_edges() # паттерн B / запасной для attach_plate
+======================================================================
+ПОЛНЫЙ СПИСОК ДОСТУПНЫХ КЛАССОВ И ФУНКЦИЙ
+======================================================================
+--- 2D-профили ---
+Circle(workPart, radius, center=(0.0,0.0), normal=(0.0,0.0,1.0))
+Circle.on_frame(workPart, radius, frame, u=0.0, v=0.0)
+Triangle.by_3_sides(workPart, side_a, side_b, side_c, center=(0,0), frame=None)
+Triangle.by_2_sides_and_angle(workPart, side_a, side_b, angle_ab, center=(0,0), frame=None)
+Triangle.by_2_angles_and_side(workPart, angle_a, angle_b, side_ab, center=(0,0), frame=None)
+Parallelogram(workPart, side_a, side_b, angle, center=(0.0,0.0), frame=None)
+Polygon(workPart, vertices)
+Polygon.on_frame(workPart, frame, local_vertices)
+--- Frame ---
+Frame(origin, u, v, normal=None)
+    .point(u=0.0, v=0.0, w=0.0)
+    .points(local_xy)
+--- Extrude: стыковка ---
+Extrude.find_edge(name, profile_index=0)
+Extrude.edge_points(name, profile_index=0)
+Extrude.vertex(name, profile_index=0)
+Extrude.bottom_edges / top_edges / vertical_edges / contact_edges
+Extrude.edges_on(body, names, profile_index=0)
+Extrude.attach_plate(edge_name, length, width, thickness,
+                      rise='same', grow='auto', overlap='auto',
+                      profile_index=0, holes=None)
+    length=None → во всю длину ребра.
+    width → ВЫСОТА стенки (вверх).
+    thickness → ТОЛЩИНА стенки.
+    «стенка высотой 15 толщиной 4» → width=15.0, thickness=4.0
+Extrude.anchor(edge_name, profile_index=0, t=0.0, offset=0.0,
+               angle=0.0, lift=0.0)
+    t — доля 0..1; offset — мм.
+    angle: 0 вверх, -90 наружу вбок, 90 плашмя, 180 вниз.
+Extrude.center_frame(profile_index=0, side='same', spin=0.0,
+                      du=0.0, dv=0.0, lift=None)
+Extrude.attach(build, thickness, frame=None, edge_name=None,
+               profile_index=0, t=0.0, offset=0.0, angle=0.0,
+               lift=0.0, direction=None, holes=None)
+    build(frame) -> Profile, строить от f.
+    holes — список таких же функций.
+ direction — указывай ТОЛЬКО если явно нужно направление, ОТЛИЧНОЕ
+    от нормали frame (редкий случай, «прилив вверх, хотя frame смотрит
+    вбок»). В большинстве случаев НЕ указывай direction= вовсе — оставь
+    его по умолчанию (frame.normal), это гарантированно совместимо
+    с построенным профилем. Не изобретай координаты направления вручную
+    (например (-1,0,0)) — если нужен рост в другую сторону, меняй angle
+    у anchor()/center_frame(), а не direction у attach().
+--- Скругление ---
+Fillet(workPart, extrude, edges, radius)
+    extrude — ТОЛЬКО Extrude (target), НЕ Union/merged.
+    edges — строки, кортежи (имя, index), или готовые NXOpen.Edge.
+--- Булевы операции ---
+Union(workPart, target, tools, *more_tools, tolerance=0.01)
+Subtract(workPart, target, tools, *more_tools, tolerance=0.01)
+Intersect(workPart, target, tools, *more_tools, tolerance=0.01)
+    tools — один Extrude/Body ИЛИ список.
+    Несколько tools:
+      Union(workPart, plate, [wall_ab, wall_cd])
+      Union(workPart, plate, wall_ab, wall_cd)
+    Результат: .body, .new_edges, .removed_edges_count
+    Результат — НЕ Extrude, у него нет find_edge.
+    После операции tools suppressed.
+attachment_seam(child, parent_body, profile_index=0, ring="bottom")
+    ТОЛЬКО паттерн A (center_frame).
+    Для anchor и attach_plate — НЕ использовать.
+edges_after_boolean(child, target_body, edge_names, profile_index=0)
+edges_in_box(body, p_min, p_max)
+edges_near(body, point, tol=1.0)
+--- Прочее ---
+rect_profile(workPart, frame, length, width, u0=0.0, v0=0.0)
+    u0=0, v0=0 — от origin в +u/+v (отступ + только вперёд; B)
+    u0=0.5, v0=0.5 — центр (паттерн A)
+    u0=0.5, v0=0 — центр по u, от origin в +v (B, «по центру»)
+center_hole(workPart, radius, length, distance_from_seam)
+    Строит функцию-отверстие для holes= у attach().
+    length — тот же, что в rect_profile того же attach().
+    Отверстие по центру вдоль ребра (u=length/2), на расстоянии
+    distance_from_seam от стыка до ближнего края (radius добавляется сам).
+    Только для rect_profile(..., u0=0.0, v0=0.0).
+holes_in_row(workPart, profile, radii, gap, y=0.0)
+    Готовые Circle для N отверстий В РЯД, равный шаг gap, симметрично
+    вокруг центра profile. profile — ClosedProfile (Parallelogram/
+    Triangle/Polygon), НЕ Circle. Возвращает список ГОТОВЫХ Circle,
+    добавляй к списку profiles: Extrude(workPart, [base] + holes_in_row(...), ...)
+    НЕ считай spacing/start_x вручную для равномерного ряда отверстий.
+Hide(theSession, *profiles)
+======================================================================
+АЛГОРИТМ РЕШЕНИЯ ЗАДАЧИ (следуй по порядку)
+======================================================================
+1. Разбей запрос на отдельные тела (каждое = контур + Extrude).
+2. Первое тело — с нуля. Остальные — через
+   anchor / center_frame / attach / attach_plate.
+   - НА грани (сверху/снизу/плашмя/бобышка) → center_frame + attach
+     (смещение по грани — du, dv; не anchor)
+   - стенка/борт на всё ребро → attach_plate
+     (width=высота, thickness=толщина, length=None)
+   - ОТ ребра, не на всю длину / под углом → anchor + attach, паттерн B
+   - build всегда от f; отверстия только holes=; отступ только offset=
+3. Union — только если явно просили объединить.
+   Несколько tools: список или несколько аргументов.
+4. Fillet — только если явно просили скруглить.
+   Шов после Union:
+     center_frame → attachment_seam(child, merged.body)
+     anchor+attach → contact_edges + edges_on
+     attach_plate → merged.new_edges
+                     (если пусто → contact_edges + edges_on)
+                     НЕ attachment_seam
+   Fillet(workPart, target, edges, radius) — target, не merged, не tools.
+5. Числа — float-совместимые, не строки.
+6. Перед нетривиальным anchor/attach — короткий комментарий:
+   где origin, куда растёт, какой u0/v0/angle и почему.
+================================================================================
+ПРИСТРОЙ К ГРАНИ/РЕБРУ — ЕДИНСТВЕННЫЙ ПАТТЕРН
+================================================================================
+# ПРАВИЛЬНО — пристрой к грани:
+frame = big_box.anchor("abb1a1", offset=10.0, angle=-90.0)
+small_box = big_box.attach(
+    lambda f: rect_profile(workPart, f, length=8.0, width=12.0, u0=0.0, v0=0.0),
+    thickness=5.0,
+    frame=frame,
+)
+# НЕПРАВИЛЬНО:
+small_base = Parallelogram(...)
+small_box = small_base.Extrude(...) # AttributeError — метода нет
+================================================================================
+СВОБОДНЫЕ / ДАЛЬНИЕ / НЕ КАСАЮТСЯ РОДИТЕЛЯ вертикальные рёбра пристроя
+(attach от ребра, v0=0):
+  → ТОЛЬКО ["cc1", "dd1"]
+  → НЕ vertical_edges() (там есть aa1, bb1 на шве)
+  → НЕ ["aa1", "bb1"] — это как раз рёбра стыка
+contact / на шве / касаются большого тела:
+  → aa1, bb1 (+ часто ab, a1b1)
+  → contact_edges() = ["ab", "aa1", "bb1", "a1b1"]
+Пример:
+  Fillet(workPart, small_box, ["cc1", "dd1"], radius=1.5)
+Антипример:
+  Fillet(workPart, small_box, small_box.vertical_edges(), ...) # скруглит и шов
+  Fillet(workPart, small_box, ["aa1", "bb1"], ...) # только шов

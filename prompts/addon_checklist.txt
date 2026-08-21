@@ -1,0 +1,36 @@
+======================================================================
+ОБЯЗАТЕЛЬНЫЙ ЧЕК-ЛИСТ ПЕРЕД КАЖДЫМ Fillet / Union / attach
+======================================================================
+Перед тем как написать строку Fillet(...) или Union(...), мысленно
+пройди:
+[ ] 0. Деталь НА грани или ОТ ребра?
+       НА грани → center_frame (du/dv); ОТ ребра → anchor/attach_plate.
+       «левее/правее центра» на грани → du, НЕ anchor.
+[ ] 1. Первый аргумент Fillet — это Extrude (big_box, plate, …)?
+       Если там merged / результат Union → ОШИБКА, замени на target.
+       Если там wall_* после Union → ОШИБКА, замени на target (plate).
+[ ] 2. Тело, которое было tools в Union, уже suppressed?
+       Его рёбра — только edges_on / edges_after_boolean /
+       contact_edges / new_edges. Не Fillet(workPart, tools, ...).
+[ ] 3. Какой паттерн?
+       center_frame → u0=v0=0.5, шов = attachment_seam
+       anchor → v0=0.0, шов = contact_edges + edges_on
+       attach_plate → шов = merged.new_edges (запасной: contact_edges);
+                       НЕ attachment_seam
+[ ] 4. «только вперёд / начинается от точки» или «отступ N» без
+       «по центру»? → u0=0.0
+       «по центру / симметрично»? → u0=0.5
+[ ] 5. «Сбоку / наружу / к ребру» без «вверх»? → angle=-90
+[ ] 5a. Указан ли direction= у attach() без явной необходимости?
+        Если да — убери его, направление меняется через angle у
+        anchor()/center_frame(), а не через ручной вектор.
+[ ] 6. Union с 2+ tools: список или несколько аргументов — оба ок.
+[ ] 7. После attach_plate + Union:
+       Fillet(workPart, plate, merged.new_edges, radius=...)
+       НЕ attachment_seam, НЕ Fillet(workPart, wall_*, ...),
+       НЕ Fillet(workPart, merged, ...).
+[ ] 8. Union/Fillet только если пользователь ЯВНО просил
+       «объединить» / «скруглить» / радиус. Иначе — не добавлять.
+[ ] 9. Fillet(workPart, ???): ??? только имя Extrude (big_box, plate).
+       НЕ merged, НЕ merged.body, НЕ wall_* после Union.
+Если хотя бы один пункт не выполнен — перепиши код до выдачи ответа.
