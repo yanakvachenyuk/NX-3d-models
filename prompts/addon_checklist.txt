@@ -15,8 +15,8 @@
 [ ] 3. Какой паттерн?
        center_frame → u0=v0=0.5, шов = attachment_seam
        anchor → v0=0.0, шов = contact_edges + edges_on
-       attach_plate → шов = merged.new_edges (запасной: contact_edges);
-                       НЕ attachment_seam
+       attach_plate → шов = attach_plate_seam(..., side=..., edge_name=...)
+               НЕ merged.new_edges, НЕ attachment_seam, НЕ ручной contact_edges
 [ ] 4. «только вперёд / начинается от точки» или «отступ N» без
        «по центру»? → u0=0.0
        «по центру / симметрично»? → u0=0.5
@@ -26,11 +26,44 @@
         anchor()/center_frame(), а не через ручной вектор.
 [ ] 6. Union с 2+ tools: список или несколько аргументов — оба ок.
 [ ] 7. После attach_plate + Union:
-       Fillet(workPart, plate, merged.new_edges, radius=...)
-       НЕ attachment_seam, НЕ Fillet(workPart, wall_*, ...),
-       НЕ Fillet(workPart, merged, ...).
-[ ] 8. Union/Fillet только если пользователь ЯВНО просил
-       «объединить» / «скруглить» / радиус. Иначе — не добавлять.
+       edges = attach_plate_seam(wall, plate, merged.body,
+                                 side=..., edge_name=...)
+       Fillet(workPart, plate, edges, radius=...)
+       НЕ merged.new_edges, НЕ attachment_seam,
+       НЕ Fillet на wall_* / merged.
+[ ] 8a. Union: есть ли в USER REQUEST слово «объединить» / «единое
+        тело» / «слить»? Нет → в коде НЕ ДОЛЖНО быть Union/Subtract/
+        Intersect, даже если это пристрой к ребру/грани.
+[ ] 8b. Fillet: есть ли в USER REQUEST слово «скруглить» / «радиус
+        скругления» / «fillet» / «сгладить угол»? Нет → в коде
+        НЕ ДОЛЖНО быть НИ ОДНОГО Fillet(...), даже если Union есть.
+        Union и Fillet — ДВА НЕЗАВИСИМЫХ решения. Наличие одного
+        слова НЕ подразумевает другое:
+          «объединить» БЕЗ «скруглить»  → Union есть, Fillet — НЕТ
+          «скруглить» БЕЗ «объединить»  → Fillet на самой Extrude-
+                                            детали, Union — НЕТ
 [ ] 9. Fillet(workPart, ???): ??? только имя Extrude (big_box, plate).
        НЕ merged, НЕ merged.body, НЕ wall_* после Union.
+[ ] 9c. Скругляешь «углы БОССА/БОБЫШКИ» (не пластины, не шва, без
+        Union)? Первый аргумент Fillet — ИМЕННО ПЕРЕМЕННАЯ БОССА
+        (boss_l, boss_r, ...), НЕ plate/big_box (это скруглит углы
+        САМОЙ ПЛАСТИНЫ, а не бобышки — грубая ошибка).
+        РЁБРА — ТОЛЬКО boss.vertical_edges() (вызов метода, все 4
+        ребра). ЗАПРЕЩЕНО писать список строк вручную — ["aa1","bb1"],
+        ["cc1","dd1"] и подобные — это паттерн ИЗ ДРУГОГО СЛУЧАЯ
+        (anchor+attach, Пример 4, где деталь растёт ОТ ребра и есть
+        понятие "шва"/"свободного края"). У center_frame-босса без
+        Union такого деления нет вообще — "углы" = ВСЕ 4 ребра сразу.
+        Если бобышек несколько — Fillet вызывается ОТДЕЛЬНО для
+        КАЖДОЙ (Fillet(workPart, boss_l, boss_l.vertical_edges(), ...);
+        Fillet(workPart, boss_r, boss_r.vertical_edges(), ...)),
+        а не один раз на пластину/на список.
+        
+[ ] Отверстие в стенке: u,v в мм (половина длины ребра, половина width), НЕ 0.5/0.5
+[ ] Отверстие в пластине: point_from_center / holes_in_row, НЕ on_frame на пластине
+[ ] Отверстие в боссе: on_frame u=0, v=0 при u0=v0=0.5
+
+[ ] «отверстия у углов / отступ d от краёв»: dx=a/2-d, dy=b/2-d, не (±d,±d)
 Если хотя бы один пункт не выполнен — перепиши код до выдачи ответа.
+
+

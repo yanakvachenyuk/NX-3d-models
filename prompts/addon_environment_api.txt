@@ -7,7 +7,7 @@ Session, workPart и все публичные имена из nx_primitives у�
 Triangle, Parallelogram, Polygon, Circle, Line,
   Extrude, Fillet, Union, Subtract, Intersect, Boolean,
   Frame, Hide, rect_profile, center_hole,
-  attachment_seam, edges_after_boolean, edges_in_box, edges_near
+    attachment_seam, edges_after_boolean, edges_in_box, edges_near, attach_plate_seam, gap_offset
 НЕ пиши:
 - import NXOpen
 - from nx_primitives import ...
@@ -128,6 +128,11 @@ attachment_seam(child, parent_body, profile_index=0, ring="bottom")
 edges_after_boolean(child, target_body, edge_names, profile_index=0)
 edges_in_box(body, p_min, p_max)
 edges_near(body, point, tol=1.0)
+attach_plate_seam(wall, plate, parent_body, side='outer', edge_name='ab', tol=1.5)
+    Швы после attach_plate + Union.
+    side: 'outer' | 'inner' | 'both'
+    edge_name — ребро из attach_plate.
+    Возвращает список NXOpen.Edge для Fillet.
 --- Прочее ---
 rect_profile(workPart, frame, length, width, u0=0.0, v0=0.0)
     u0=0, v0=0 — от origin в +u/+v (отступ + только вперёд; B)
@@ -139,13 +144,37 @@ center_hole(workPart, radius, length, distance_from_seam)
     Отверстие по центру вдоль ребра (u=length/2), на расстоянии
     distance_from_seam от стыка до ближнего края (radius добавляется сам).
     Только для rect_profile(..., u0=0.0, v0=0.0).
-holes_in_row(workPart, profile, radii, gap, y=0.0)
-    Готовые Circle для N отверстий В РЯД, равный шаг gap, симметрично
-    вокруг центра profile. profile — ClosedProfile (Parallelogram/
-    Triangle/Polygon), НЕ Circle. Возвращает список ГОТОВЫХ Circle,
-    добавляй к списку profiles: Extrude(workPart, [base] + holes_in_row(...), ...)
-    НЕ считай spacing/start_x вручную для равномерного ряда отверстий.
+holes_in_row(workPart, profile, radii, gap, y=0.0, n=None,
+             align='center', edge_offset=None, x0=None)
+    Готовые Circle для N отверстий В РЯД, равный шаг gap.
+    profile — ClosedProfile (Parallelogram/Triangle/Polygon), НЕ Circle.
+    Возвращает список ГОТОВЫХ Circle, добавляй к profiles:
+        Extrude(workPart, [base] + holes_in_row(...), ...)
+    radii:
+      - список чисел (длина = число отверстий), ЛИБО
+      - одно число + n= (тогда создаётся n одинаковых отверстий этого радиуса)
+    align:
+      'center' (по умолчанию) — ряд центрируется симметрично вокруг центра profile
+      'start' — первое отверстие смещено на edge_offset мм от короткого
+                края profile (требует edge_offset=)
+    x0 — прямая X-координата первого отверстия (приоритетнее align)
+    y — смещение ПОПЕРЁК ряда (как раньше)
+    НЕ считай x0/start_x вручную для align='center' — функция сама
+    центрирует. Для align='start' НЕ считай edge_offset как x0 —
+    edge_offset считается автоматически внутри функции от side_a профиля.
 Hide(theSession, *profiles)
+gap_offset(gap, size1, size2=None) -> float
+    Считает du для ДВУХ объектов (боссов/деталей), расположенных
+    симметрично с зазором gap между их ближними гранями.
+    size1, size2 — ПОЛНЫЕ размеры объектов вдоль оси смещения
+    (например, сторона бобышки 20x20 -> size1=20.0), НЕ половины.
+    Если size2 не передан — оба объекта одного размера.
+    Использование:
+        du = gap_offset(gap=8.0, size1=20.0)
+        frame_l = plate.center_frame(side='same', du=-du)
+        frame_r = plate.center_frame(side='same', du=du)
+    НЕ считай half1/half2/center_dist вручную для двух объектов —
+    gap_offset делает это сама.
 ======================================================================
 АЛГОРИТМ РЕШЕНИЯ ЗАДАЧИ (следуй по порядку)
 ======================================================================
@@ -164,13 +193,22 @@ Hide(theSession, *profiles)
    Шов после Union:
      center_frame → attachment_seam(child, merged.body)
      anchor+attach → contact_edges + edges_on
-     attach_plate → merged.new_edges
-                     (если пусто → contact_edges + edges_on)
-                     НЕ attachment_seam
+     attach_plate → attach_plate_seam(wall, plate, merged.body,
+                                 side=..., edge_name=...)
+               НЕ merged.new_edges, НЕ attachment_seam
    Fillet(workPart, target, edges, radius) — target, не merged, не tools.
 5. Числа — float-совместимые, не строки.
 6. Перед нетривиальным anchor/attach — короткий комментарий:
    где origin, куда растёт, какой u0/v0/angle и почему.
+7. САМОПРОВЕРКА ПЕРЕД ВЫДАЧЕЙ КОДА (обязательна всегда):
+   - Найди в USER REQUEST слова «скруглить»/«радиус»/«fillet».
+     Если их НЕТ — убедись, что в твоём коде НЕТ ни одного вызова
+     Fillet(...). Если Fillet случайно оказался в коде — удали его
+     целиком (включая переменные edges/names/seam, которые
+     существуют только для него).
+   - Найди в USER REQUEST слова «объединить»/«единое тело».
+     Если их НЕТ — убедись, что в коде НЕТ Union/Subtract/Intersect.
+   - Это ДВЕ независимые проверки, делай обе.
 ================================================================================
 ПРИСТРОЙ К ГРАНИ/РЕБРУ — ЕДИНСТВЕННЫЙ ПАТТЕРН
 ================================================================================

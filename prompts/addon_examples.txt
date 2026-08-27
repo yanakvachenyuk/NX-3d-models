@@ -1,21 +1,32 @@
 ======================================================================
 ПРИМЕРЫ (следуй этим паттернам буквально)
 ======================================================================
---- Пример 1: пластина + одна стенка (attach_plate) + шов new_edges ---
+--- Пример 1: пластина + одна стенка (attach_plate) + шов ---
 base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
 plate = Extrude(workPart, [base], height=3.0, direction=(0.0, 0.0, 1.0))
 wall = plate.attach_plate("ab", length=None, width=20.0, thickness=3.0)
 merged = Union(workPart, plate, wall)
-Fillet(workPart, plate, merged.new_edges, radius=1.0)
+# «шов» без уточнения → наружный
+edges = attach_plate_seam(wall, plate, merged.body, side='outer', edge_name='ab')
+Fillet(workPart, plate, edges, radius=1.0)
 --- Пример 1b: пластина + две стенки на длинных рёбрах ---
 base = Parallelogram(workPart, side_a=70.0, side_b=40.0, angle=90.0)
 plate = Extrude(workPart, [base], height=3.0, direction=(0.0, 0.0, 1.0))
-# width=15 — высота; thickness=4 — толщина
 wall_ab = plate.attach_plate("ab", length=None, width=15.0, thickness=4.0)
 wall_cd = plate.attach_plate("cd", length=None, width=15.0, thickness=4.0)
 merged = Union(workPart, plate, wall_ab, wall_cd)
-# attach_plate → шов new_edges; Fillet только на plate
-Fillet(workPart, plate, merged.new_edges, radius=1.0)
+edges = (
+    attach_plate_seam(wall_ab, plate, merged.body, side='outer', edge_name='ab')
+    + attach_plate_seam(wall_cd, plate, merged.body, side='outer', edge_name='cd')
+)
+Fillet(workPart, plate, edges, radius=1.0)
+--- Пример 1c: наружный + внутренний шов ---
+base = Parallelogram(workPart, side_a=100.0, side_b=50.0, angle=90.0)
+plate = Extrude(workPart, [base], height=2.0, direction=(0.0, 0.0, 1.0))
+wall = plate.attach_plate("ab", length=None, width=50.0, thickness=2.0)
+merged = Union(workPart, plate, wall)
+edges = attach_plate_seam(wall, plate, merged.body, side='both', edge_name='ab')
+Fillet(workPart, plate, edges, radius=5.0)
 --- Пример 2: босс плашмя (паттерн A) ---
 base = Parallelogram(workPart, side_a=60.0, side_b=60.0, angle=90.0)
 plate = Extrude(workPart, [base], height=3.0, direction=(0.0, 0.0, 1.0))
@@ -58,6 +69,49 @@ boss_r = plate.attach(
     lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
     thickness=4.0,
     frame=plate.center_frame(side='same', du=30.0),
+    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)],
+)
+--- Пример 2d: ДВЕ бобышки на грани с зазором ---
+base = Parallelogram(workPart, side_a=100.0, side_b=60.0, angle=90.0)
+plate = Extrude(workPart, [base], height=4.0)
+# зазор 10 мм между боссами 15x15 - gap_offset сама считает du из
+# ПОЛНЫХ размеров боссов, не нужно делить на 2 вручную
+du = gap_offset(gap=10.0, size1=15.0)
+boss_l = plate.attach(
+    lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
+    thickness=5.0,
+    frame=plate.center_frame(side='same', du=-du),
+)
+boss_r = plate.attach(
+    lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
+    thickness=5.0,
+    frame=plate.center_frame(side='same', du=du),
+)
+--- Пример 2e: три бобышки с РАЗНЫМИ радиусами отверстий (по одному на бобышку) ---
+base = Parallelogram(workPart, side_a=120.0, side_b=80.0, angle=90.0)
+plate = Extrude(workPart, [base], height=5.0)
+
+# центральная бобышка, R3 — первое значение из списка "R3, R2, R2"
+boss_center = plate.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=20.0, u0=0.5, v0=0.5),
+    thickness=6.0,
+    frame=plate.center_frame(side='same'),
+    holes=[lambda f: Circle.on_frame(workPart, 3.0, f, u=0.0, v=0.0)],
+)
+
+# левая бобышка, R2 — второе значение из списка
+boss_left = plate.attach(
+    lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
+    thickness=4.0,
+    frame=plate.center_frame(side='same', du=-25.0),
+    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)],
+)
+
+# правая бобышка, R2 — третье значение из списка
+boss_right = plate.attach(
+    lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
+    thickness=4.0,
+    frame=plate.center_frame(side='same', du=25.0),
     holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)],
 )
 --- Пример 3: прилив наружу от грани ---
@@ -184,10 +238,30 @@ merged = Union(workPart, big_box, small_box)
 names = list(dict.fromkeys(small_box.contact_edges() + small_box.vertical_edges()))
 small_edges = small_box.edges_on(merged.body, names)
 Fillet(workPart, big_box, small_edges + big_box.vertical_edges(), radius=1.0)
+--- Пример 13: anchor + attach + Union, БЕЗ Fillet (нет слова "скруглить") ---
+base = Parallelogram(workPart, side_a=120.0, side_b=60.0, angle=90.0)
+plate = Extrude(workPart, [base], height=5.0, direction=(0.0, 0.0, 1.0))
+frame = plate.anchor("ab", t=0.5, offset=5.0, angle=-90.0)
+outward = plate.attach(
+    lambda f: rect_profile(workPart, f, length=25.0, width=15.0, u0=0.0, v0=0.0),
+    thickness=8.0,
+    frame=frame,
+    holes=[lambda f: Circle.on_frame(workPart, 3.0, f, u=12.5, v=7.5)],
+)
+merged = Union(workPart, plate, outward)
+# В запросе НЕТ слова "скруглить"/"радиус" -> Fillet НЕ добавляется,
+# даже несмотря на то, что есть Union и деталь пристроена от ребра.
 --- Пример: пластина + отверстия в ряд ---
 base = Parallelogram(workPart, side_a=100.0, side_b=60.0, angle=90.0)
 holes = holes_in_row(workPart, base, radii=[3.0, 5.0, 7.0], gap=20.0, y=0.0)
 plate = Extrude(workPart, [base] + holes, height=5.0)
+--- Пример: ряд одинаковых отверстий с отступом от короткой стороны ---
+base = Parallelogram(workPart, side_a=90.0, side_b=60.0, angle=90.0)
+# 5 одинаковых отверстий R3, первое — 15 мм от короткого края (side_a),
+# по центру ширины (y=0 по умолчанию)
+holes = holes_in_row(workPart, base, radii=3.0, gap=12.0, n=5,
+                      align='start', edge_offset=15.0)
+plate = Extrude(workPart, [base] + holes, height=4.0)
 --- Пример: отверстия по углам + центр (только point_from_center!) ---
 base = Parallelogram(workPart, side_a=80.0, side_b=80.0, angle=90.0)
 holes = [
@@ -196,6 +270,44 @@ holes = [
     Circle(workPart, radius=5.0, center=base.point_from_center(-30.0, 30.0)),
     Circle(workPart, radius=5.0, center=base.point_from_center( 30.0, 30.0)),
     Circle(workPart, radius=10.0, center=base.point_from_center(0.0, 0.0)),
+]
+plate = Extrude(workPart, [base] + holes, height=4.0)
+
+
+
+--- Пример: стенка + отверстие ПО ЦЕНТРУ (u,v в мм) ---
+base = Parallelogram(workPart, side_a=100.0, side_b=30.0, angle=90.0)
+plate = Extrude(workPart, [base], height=4.0)
+# ребро ab = 100 мм, высота стенки width=20 → центр u=50, v=10
+wall = plate.attach_plate(
+    "ab", length=None, width=20.0, thickness=4.0,
+    holes=[lambda f: Circle.on_frame(workPart, 3.0, f, u=50.0, v=10.0)],
+)
+
+
+--- Пример: отверстие В ПЛАСТИНЕ + стенка БЕЗ отверстия ---
+base = Parallelogram(workPart, side_a=70.0, side_b=40.0, angle=90.0)
+hole = Circle(workPart, radius=5.0, center=base.point_from_center())
+plate = Extrude(workPart, [base, hole], height=3.0)
+wall = plate.attach_plate("ab", length=None, width=12.0, thickness=3.0)
+# НЕТ holes= у wall
+# НЕТ второго Extrude
+# НЕТ Union, если не просили
+
+
+
+
+--- Пример: отверстия у углов, отступ от краёв ---
+# Пластина 80×40, отступ 10 мм от краёв → dx=side_a/2-d, dy=side_b/2-d
+side_a, side_b = 80.0, 40.0
+base = Parallelogram(workPart, side_a=side_a, side_b=side_b, angle=90.0)
+d = 10.0
+dx, dy = side_a/2 - d, side_b/2 - d
+holes = [
+    Circle(workPart, radius=5.0, center=base.point_from_center(-dx, -dy)),
+    Circle(workPart, radius=5.0, center=base.point_from_center( dx, -dy)),
+    Circle(workPart, radius=5.0, center=base.point_from_center(-dx,  dy)),
+    Circle(workPart, radius=5.0, center=base.point_from_center( dx,  dy)),
 ]
 plate = Extrude(workPart, [base] + holes, height=4.0)
 ======================================================================

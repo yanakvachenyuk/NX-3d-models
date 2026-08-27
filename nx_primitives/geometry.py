@@ -221,3 +221,21 @@ class Frame:
 
     def points(self, local_xy):
         return [self.point(u, v) for u, v in local_xy]
+
+
+def gap_offset(gap: float, size1: float, size2: float = None) -> float:
+    """
+    Считает du (смещение от центра грани) для ДВУХ объектов,
+    расположенных симметрично с зазором `gap` между их БЛИЖНИМИ гранями.
+
+    size1, size2 - ПОЛНЫЕ размеры объектов вдоль оси смещения
+    (например, сторона бобышки 20x20 -> size=20.0), НЕ половины.
+    Если size2 не передан - оба объекта одного размера (size1).
+
+    Возвращает ОДНО число du; используй ±du для двух объектов:
+        du = gap_offset(gap=8.0, size1=20.0)
+        frame_l = plate.center_frame(side='same', du=-du)
+        frame_r = plate.center_frame(side='same', du=du)
+    """
+    size2 = size1 if size2 is None else size2
+    return (gap + size1 / 2.0 + size2 / 2.0) / 2.0

@@ -22,7 +22,8 @@ def save_result(code: str) -> Path:
     return OUTPUT_FILE
 
 
-def run_generation(user_request: str, max_attempts: int = 3) -> Path:
+def run_generation(user_request: str, max_attempts: int = 5) -> Path:
+    log_lines = []                     # <-- собираем лог
     prompt = build_prompt(user_request)
     save_prompt_log(prompt)
 
@@ -30,13 +31,17 @@ def run_generation(user_request: str, max_attempts: int = 3) -> Path:
     current_prompt = prompt
 
     for attempt in range(1, max_attempts + 1):
+        log_lines.append(f"Попытка {attempt} из {max_attempts}")
         code = generate(current_prompt)
         error = validate_code(code, user_request)
 
         if error is None:
+            log_lines.append("✅ Валидация пройдена")
+            # в случае успеха лог не выводим, но можем сохранить для отладки
             return save_result(code)
 
         last_error = error
+        log_lines.append(f"❌ Ошибка валидации: {error}")
         current_prompt = (
             f"{prompt}\n\n"
             "================================================================================\n"
@@ -47,9 +52,10 @@ def run_generation(user_request: str, max_attempts: int = 3) -> Path:
             "Помни: только исполняемый Python-код, без ``` и без import/session/workPart.\n"
         )
 
+    # Если все попытки неудачны – выбрасываем исключение с полным логом
     raise RuntimeError(
-        f"Не удалось получить валидный код за {max_attempts} попыток. "
-        f"Последняя ошибка: {last_error}"
+        f"Не удалось получить валидный код за {max_attempts} попыток.\n"
+        "Подробный лог:\n" + "\n".join(log_lines) + f"\nПоследняя ошибка: {last_error}"
     )
 
 

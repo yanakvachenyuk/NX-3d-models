@@ -57,12 +57,20 @@ small_edges = small_box.edges_on(merged.body, names)
 rect_profile(..., u0=0.0, v0=0.5)
 # Хорошо при anchor:
 rect_profile(..., u0=0.0, v0=0.0)
-# Плохо после attach_plate (не те рёбра + Fillet на merged/wall):
-seam = attachment_seam(wall_ab, merged.body)
-Fillet(workPart, merged, seam, radius=1.0)
-Fillet(workPart, wall_ab, seam, radius=1.0)
-# Хорошо после attach_plate:
+# Плохо после attach_plate:
+seam = attachment_seam(wall, merged.body)
 Fillet(workPart, plate, merged.new_edges, radius=1.0)
+names = list(dict.fromkeys(wall.contact_edges()))
+edges = wall.edges_on(merged.body, names)
+Fillet(workPart, plate, edges, radius=1.0)
+
+# Хорошо после attach_plate:
+edges = attach_plate_seam(wall, plate, merged.body, side='outer', edge_name='ab')
+Fillet(workPart, plate, edges, radius=1.0)
+
+# «внешний и внутренний» / «оба шва»:
+edges = attach_plate_seam(wall, plate, merged.body, side='both', edge_name='ab')
+Fillet(workPart, plate, edges, radius=5.0)
 # Плохо: width/thickness перепутаны
 plate.attach_plate("ab", length=None, width=4.0, thickness=15.0) # ляжет
 # Хорошо: высота 15, толщина 4
@@ -113,3 +121,41 @@ wall = plate.attach(
     thickness=3.0,
     frame=frame,
 )
+
+
+
+# ПЛОХО — стенка, «по центру», но u,v как доли:
+holes=[lambda f: Circle.on_frame(workPart, 3.0, f, u=0.5, v=0.5)]
+# ХОРОШО — пластина 100, стенка height=20:
+holes=[lambda f: Circle.on_frame(workPart, 3.0, f, u=50.0, v=10.0)]
+
+# ПЛОХО — отверстие в пластине через on_frame / доли
+# ХОРОШО:
+hole = Circle(workPart, radius=5.0, center=base.point_from_center(0.0, 0.0))
+plate = Extrude(workPart, [base, hole], height=4.0)
+
+# ПЛОХО — отверстие «в пластине», но два Extrude + стенка к телу без дырки:
+plate = Extrude(workPart, [base], height=3.0)
+hole = Circle(workPart, radius=5.0, center=base.point_from_center())
+plate2 = Extrude(workPart, [base, hole], height=3.0)
+wall = plate.attach_plate(...)  # дырки нет, круг может быть виден
+
+# ПЛОХО — «отверстие в пластине» перенесено в holes= стенки:
+wall = plate.attach_plate(..., holes=[lambda f: Circle.on_frame(..., u=35, v=6)])
+
+# ПЛОХО — «у углов, отступ 10 от краёв» на 80×40:
+point_from_center(±10, ±10)   # не углы
+point_from_center(70, 30)     # вне пластины
+# ХОРОШО:
+point_from_center(±30, ±10)
+
+# Плохо после attach_plate — new_edges / ручной contact_edges / attachment_seam:
+Fillet(workPart, plate, merged.new_edges, radius=1.0)
+names = list(dict.fromkeys(wall.contact_edges()))
+edges = wall.edges_on(merged.body, names)
+Fillet(workPart, plate, edges, radius=1.0)
+seam = attachment_seam(wall, merged.body)
+
+# Хорошо:
+edges = attach_plate_seam(wall, plate, merged.body, side='outer', edge_name='ab')
+Fillet(workPart, plate, edges, radius=1.0)

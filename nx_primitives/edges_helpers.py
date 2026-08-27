@@ -305,3 +305,58 @@ def edges_after_boolean(child: Extrude, target_body, edge_names, profile_index: 
         except ValueError:
             pass
     return result
+
+def _add(a, b):
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+
+def attach_plate_seam(wall, plate, parent_body, side='outer', edge_name='ab', tol=1.5):
+    """
+    Швы после attach_plate + Union.
+
+    side:
+      'outer' — только наружный стыковой шов
+      'inner' — только внутренний шов (на верхней грани пластины,
+                смещённый внутрь на толщину стенки)
+      'both'  — оба
+
+    edge_name — ребро, на которое ставили стенку (то же, что в attach_plate).
+    parent_body — обычно merged.body.
+    """
+    side = side.lower().strip()
+    if side not in ('outer', 'inner', 'both'):
+        raise ValueError("side должен быть 'outer', 'inner' или 'both'")
+
+    result = []
+
+    # --- наружный шов (через исходные рёбра стенки) ---
+    if side in ('outer', 'both'):
+        names = list(dict.fromkeys(wall.contact_edges()))
+        result.extend(edges_after_boolean(wall, parent_body, names))
+
+    # --- внутренний шов (ищем по положению) ---
+    if side in ('inner', 'both'):
+        p1, p2 = plate.edge_points(edge_name)
+        mid = tuple((a + b) / 2 for a, b in zip(p1, p2))
+
+        inward = plate.inward_direction(edge_name)
+        up = _unit_vector(plate.direction)
+
+        # внутрь на толщину стенки + на верх пластины
+        inner_point = _add(
+            mid,
+            _add(
+                _scale(inward, wall.height),
+                _scale(up, plate.height),
+            ),
+        )
+        result.extend(edges_near(parent_body, inner_point, tol=tol))
+
+    # убрать возможные дубликаты (один и тот же Edge)
+    seen = set()
+    unique = []
+    for e in result:
+        if id(e) not in seen:
+            seen.add(id(e))
+            unique.append(e)
+    return unique

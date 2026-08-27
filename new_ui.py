@@ -40,9 +40,10 @@ class new_ui:
             self.theDialog.AddInitializeHandler(self.initialize_cb)
             self.theDialog.AddDialogShownHandler(self.dialogShown_cb)
         except Exception as ex:
+            # Только критическая ошибка – показываем окно
+            self.theUI.NXMessageBox.Show("Ошибка", NXOpen.NXMessageBox.DialogType.Error, str(ex))
             raise ex
         
-    
     #------------------------------------------------------------------------------
     # This method launches the dialog to screen
     #------------------------------------------------------------------------------
@@ -51,8 +52,7 @@ class new_ui:
         try:
             dialogResponse = self.theDialog.Launch()
         except Exception as ex:
-            self.theUI.NXMessageBox.Show("Block Styler", NXOpen.NXMessageBox.DialogType.Error, str(ex))
-        
+            self.theUI.NXMessageBox.Show("Ошибка", NXOpen.NXMessageBox.DialogType.Error, str(ex))
         return dialogResponse
     
     #------------------------------------------------------------------------------
@@ -72,18 +72,13 @@ class new_ui:
             self.multiline_string0 = self.theDialog.TopBlock.FindBlock("multiline_string0")
             self.button0 = self.theDialog.TopBlock.FindBlock("button0")
         except Exception as ex:
-            self.theUI.NXMessageBox.Show("Block Styler", NXOpen.NXMessageBox.DialogType.Error, str(ex))
-        
+            self.theUI.NXMessageBox.Show("Ошибка", NXOpen.NXMessageBox.DialogType.Error, str(ex))
     
     #------------------------------------------------------------------------------
     # Callback Name: dialogShown_cb
     #------------------------------------------------------------------------------
     def dialogShown_cb(self):
-        try:
-            pass
-        except Exception as ex:
-            self.theUI.NXMessageBox.Show("Block Styler", NXOpen.NXMessageBox.DialogType.Error, str(ex))
-        
+        pass
     
     #------------------------------------------------------------------------------
     # Callback Name: apply_cb
@@ -94,10 +89,22 @@ class new_ui:
             pass
         except Exception as ex:
             errorCode = 1
-            self.theUI.NXMessageBox.Show("Block Styler", NXOpen.NXMessageBox.DialogType.Error, str(ex))
-        
+            self.theUI.NXMessageBox.Show("Ошибка", NXOpen.NXMessageBox.DialogType.Error, str(ex))
         return errorCode
     
+    #------------------------------------------------------------------------------
+    # Helper: вывод сообщения в Listing Window
+    #------------------------------------------------------------------------------
+    def show_in_listing(self, text: str):
+        listing = self.theSession.ListingWindow
+        listing.Open()
+        listing.WriteLine("=" * 80)
+        listing.WriteLine("Ошибка генерации модели")
+        listing.WriteLine("=" * 80)
+        listing.WriteLine(text)
+        listing.WriteLine("=" * 80)
+        listing.Close()  # закрываем после записи, окно останется открытым
+
     #------------------------------------------------------------------------------
     # Callback Name: update_cb
     #------------------------------------------------------------------------------
@@ -107,24 +114,11 @@ class new_ui:
                 pass
             elif block == self.button0:
                 try:
-                    # MultilineString не имеет .Value - у него метод GetValue(),
-                    # который возвращает список строк (по одной на строку ввода)
                     lines = self.multiline_string0.GetValue()
                     user_request = "\n".join(lines).strip() if lines else ""
 
                     if not user_request:
-                        self.theUI.NXMessageBox.Show(
-                            "NX AI Generator", NXOpen.NXMessageBox.DialogType.Warning,
-                            "Введите запрос."
-                        )
                         return 0
-
-                    listing = self.theSession.ListingWindow
-                    listing.Open()
-                    listing.WriteLine("=" * 60)
-                    listing.WriteLine(f"Запрос: {user_request}")
-                    listing.WriteLine("Генерация запущена, ждите ответа от нейронки...")
-                    listing.WriteLine("(может занять 1-3 минуты на локальной модели)")
 
                     python_exe = r"C:\Users\user\AppData\Local\Programs\Python\Python313\python.exe"
                     generate_script = r"C:\Users\user\Desktop\NX-3d-models\generate.py"
@@ -137,30 +131,25 @@ class new_ui:
                     )
 
                     if proc.returncode != 0:
-                        listing.WriteLine("ОШИБКА при генерации:")
-                        listing.WriteLine(proc.stdout)
-                        listing.WriteLine(proc.stderr)
-                        raise RuntimeError("generate.py завершился с ошибкой (см. Listing Window)")
+                        # Ошибка генерации – выводим stderr в Listing Window
+                        self.show_in_listing(proc.stderr)
+                        return 0
 
-                    listing.WriteLine("Генерация завершена, читаю result.py...")
-
+                    # Генерация успешна, выполняем код
                     with open(result_path, "r", encoding="utf-8") as f:
                         code = f.read()
                     exec(code, {})
 
-                    listing.WriteLine("Готово: модель построена.")
+                    # Успех – никаких сообщений
 
-                    self.theUI.NXMessageBox.Show(
-                        "NX AI Generator", NXOpen.NXMessageBox.DialogType.Information,
-                        "Модель построена"
-                    )
+                except subprocess.TimeoutExpired:
+                    self.show_in_listing("Превышено время ожидания генерации (900 сек)")
                 except Exception as ex:
-                    self.theUI.NXMessageBox.Show(
-                        "NX AI Generator", NXOpen.NXMessageBox.DialogType.Error, str(ex)
-                    )
+                    # Любая другая ошибка (в том числе exec) – выводим детали
+                    self.show_in_listing(f"Ошибка выполнения:\n{str(ex)}")
         except Exception as ex:
-            self.theUI.NXMessageBox.Show("Block Styler", NXOpen.NXMessageBox.DialogType.Error, str(ex))
-        
+            # Общая ошибка в callback – выводим в Listing Window
+            self.show_in_listing(f"Общая ошибка:\n{str(ex)}")
         return 0
     
     #------------------------------------------------------------------------------
@@ -172,8 +161,7 @@ class new_ui:
             errorCode = self.apply_cb()
         except Exception as ex:
             errorCode = 1
-            self.theUI.NXMessageBox.Show("Block Styler", NXOpen.NXMessageBox.DialogType.Error, str(ex))
-        
+            self.theUI.NXMessageBox.Show("Ошибка", NXOpen.NXMessageBox.DialogType.Error, str(ex))
         return errorCode
     
     #------------------------------------------------------------------------------
@@ -183,8 +171,7 @@ class new_ui:
         try:
             return self.theDialog.GetBlockProperties(blockID)
         except Exception as ex:
-            self.theUI.NXMessageBox.Show("Block Styler", NXOpen.NXMessageBox.DialogType.Error, str(ex))
-        
+            self.theUI.NXMessageBox.Show("Ошибка", NXOpen.NXMessageBox.DialogType.Error, str(ex))
         return None
     
 def main():
@@ -193,7 +180,7 @@ def main():
         thenew_ui = new_ui()
         thenew_ui.Launch()
     except Exception as ex:
-        NXOpen.UI.GetUI().NXMessageBox.Show("Block Styler", NXOpen.NXMessageBox.DialogType.Error, str(ex))
+        NXOpen.UI.GetUI().NXMessageBox.Show("Ошибка", NXOpen.NXMessageBox.DialogType.Error, str(ex))
     finally:
         if thenew_ui != None:
             thenew_ui.Dispose()

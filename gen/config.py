@@ -44,7 +44,9 @@ from nx_primitives import (
     edges_in_box,
     edges_near,
     center_hole,
-    holes_in_row
+    holes_in_row,
+    attach_plate_seam, 
+    gap_offset
 )
 
 theSession = NXOpen.Session.GetSession()
