@@ -83,6 +83,9 @@ radius), а НЕ в раздельные последовательные выз
                 "(например, если тела слились без видимого перепада)."
             )
 
+        if radius <= 0:
+            raise ValueError(f"Fillet: radius должен быть положительным, получено {radius}.")
+
         edge_objs = []
 
         for entry in edges:

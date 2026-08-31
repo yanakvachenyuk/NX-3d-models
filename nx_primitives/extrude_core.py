@@ -46,6 +46,13 @@ def rect_profile(
 
     u0/v0 — старый числовой API (доля 0..1). Если переданы — имеют приоритет.
     """
+
+    if length <= 0 or width <= 0:
+        raise ValueError(
+            f"rect_profile: length и width должны быть положительными, "
+            f"получено length={length}, width={width}."
+        )
+
     align_map = {"start": 0.0, "center": 0.5, "end": 1.0}
 
     if u0 is None:
@@ -89,16 +96,25 @@ class Extrude:
         workPart,
         profiles: list[Profile],
         height: float,
-        direction=(0.0, 0.0, 1.0)
+        direction=(0.0, 0.0, 1.0),
+        draft_angle: float = 0.0
     ):
 
         if len(profiles) == 0:
             raise ValueError("Не передано ни одного профиля.")
 
+        if height <= 0:
+            raise ValueError(f"Extrude: height должен быть положительным, получено {height}.")
+
+        dir_mag = sqrt(direction[0]**2 + direction[1]**2 + direction[2]**2)
+        if dir_mag < 1e-9:
+            raise ValueError(f"Extrude: direction не может быть нулевым вектором, получено {direction}.")
+
         self.workPart = workPart
         self.profiles = profiles
         self.height = height
         self.direction = direction
+        self.draft_angle = draft_angle
 
         # Флаги suppressed-состояния (см. Boolean.__init__ / _mark_suppressed).
         # По умолчанию тело активно.
@@ -125,9 +141,14 @@ class Extrude:
 
         builder.Limits.EndExtend.Value.SetFormula(str(height))
 
-        builder.Draft.FrontDraftAngle.SetFormula("0")
+        if draft_angle:
+            builder.Draft.DraftOption = (
+                NXOpen.GeometricUtilities.SimpleDraft.SimpleDraftType.SimpleFromProfile
+            )
 
-        builder.Draft.BackDraftAngle.SetFormula("0")
+        builder.Draft.FrontDraftAngle.SetFormula(str(draft_angle))
+
+        builder.Draft.BackDraftAngle.SetFormula(str(draft_angle))
 
         builder.Offset.StartOffset.SetFormula("0")
 
@@ -388,6 +409,127 @@ class Extrude:
         """
         names, _ = self._profile_vertex_names(profile_index)
         return [name + name + "1" for name in names]
+
+    def circular_edge(self, profile_index: int = 0, ring: str = "bottom", tol: float = 1.0):
+        """
+        Круглое ребро (верхнее или нижнее кольцо) экструзии профиля-окружности
+        (Circle). В отличие от многоугольных профилей, у круга нет именованных
+        вершин/рёбер - метод ищет ребро по его РАСПОЛОЖЕНИЮ вдоль оси
+        экструзии, а не по имени.
+
+        profile_index — индекс профиля (Circle) в списке, переданном в Extrude.
+        ring          — "bottom" (плоскость исходного профиля) или "top"
+                        (плоскость профиля, сдвинутая на height вдоль direction).
+        tol           — допуск (мм) при сравнении положения вдоль оси.
+
+        ПРИМЕЧАНИЕ: опирается на edge.SolidEdgeType == NXOpen.Edge.EdgeType.Circular
+        и на edge.GetVertices()[0] как на опорную точку кольца (для замкнутого
+        кругового ребра обычно есть ровно одна вершина - шов). Это не так
+        отработано на практике, как find_edge для многоугольников - если
+        упадёт с неожиданной ошибкой (например AttributeError на
+        SolidEdgeType), пришли точный текст ошибки, поправим.
+        """
+        profile = self.profiles[profile_index]
+        center = getattr(profile, "center", None)
+        if center is None:
+            raise ValueError(
+                f"circular_edge(): профиль с индексом {profile_index} не имеет "
+                f"атрибута center (ожидался Circle)."
+            )
+
+        unit_dir = _unit_vector(self.direction)
+        target_h = self.height if ring == "top" else 0.0
+
+        candidates = []
+        for edge in _get_body_edges_safe(self.body):
+            if getattr(edge, "SolidEdgeType", None) != NXOpen.Edge.EdgeType.Circular:
+                continue
+            vs = edge.GetVertices()
+            if not vs:
+                continue
+            p = (vs[0].X, vs[0].Y, vs[0].Z)
+            to_p = _subtract(p, center)
+            proj = sum(a * b for a, b in zip(to_p, unit_dir))
+            if abs(proj - target_h) <= tol:
+                candidates.append(edge)
+
+        if not candidates:
+            raise ValueError(
+                f"Круглое ребро ({ring}) не найдено для профиля {profile_index} "
+                f"(искали на высоте {target_h} вдоль {self.direction} от {center})."
+            )
+
+        return candidates[0]
+
+    def face_from_edges(self, edge_names, profile_index: int = 0):
+        """
+        Находит ГРАНЬ тела, содержащую ВСЕ указанные рёбра (по имени -
+        строка/кортеж, как в find_edge - или уже готовый NXOpen.Edge).
+
+        Работает через пересечение множеств граней, смежных с каждым
+        ребром (edge.GetFaces()), и затем выбирает среди кандидатов ту,
+        чей СОБСТВЕННЫЙ контур (face.GetEdges()) в точности совпадает
+        с переданным набором рёбер - это отсекает, например, боковую
+        цилиндрическую грань при поиске круглой торцевой грани по
+        одному кольцевому ребру.
+        """
+        edge_objs = []
+        for entry in edge_names:
+            if hasattr(entry, "GetVertices"):
+                edge_objs.append(entry)
+            elif isinstance(entry, tuple):
+                name, pi = entry
+                edge_objs.append(self.find_edge(name, pi))
+            else:
+                edge_objs.append(self.find_edge(entry, profile_index))
+
+        target_edges = set(edge_objs)
+
+        common = None
+        for edge in edge_objs:
+            faces = set(edge.GetFaces())
+            common = faces if common is None else (common & faces)
+
+        if not common:
+            raise ValueError(
+                f"Не найдено грани, смежной со всеми рёбрами {edge_names}."
+            )
+
+        exact = [f for f in common if set(f.GetEdges()) == target_edges]
+        if len(exact) == 1:
+            return exact[0]
+
+        if len(common) == 1:
+            return next(iter(common))
+
+        raise ValueError(
+            f"Не удалось однозначно определить грань по рёбрам {edge_names} - "
+            f"найдено {len(common)} подходящих граней, ни одна не совпадает "
+            f"с контуром в точности. Передайте более полный/точный набор рёбер."
+        )
+
+    def top_face(self, profile_index: int = 0):
+        """Верхняя грань (по кольцу top_edges()) для многоугольного профиля."""
+        return self.face_from_edges(self.top_edges(profile_index), profile_index)
+
+    def bottom_face(self, profile_index: int = 0):
+        """Нижняя грань (по кольцу bottom_edges()) для многоугольного профиля."""
+        return self.face_from_edges(self.bottom_edges(profile_index), profile_index)
+
+    def side_face(self, edge_name: str, profile_index: int = 0):
+        """
+        Боковая грань по имени нижнего ребра ('ab') или имени самой грани
+        ('abb1a1') - принимает то же, что side_faces()/_resolve_edge_or_face_name.
+        """
+        edge_name = self._resolve_edge_or_face_name(edge_name, profile_index)
+        l1, l2 = _parse_edge_name(edge_name, self.profile_labels[profile_index].keys())
+        names = [edge_name, l1 + l1 + "1", l2 + l2 + "1", l1 + "1" + l2 + "1"]
+        return self.face_from_edges(names, profile_index)
+
+    def circular_face(self, profile_index: int = 0, ring: str = "bottom", tol: float = 1.0):
+        """Торцевая грань экструзии профиля-круга (Circle) - верх или низ."""
+        edge = self.circular_edge(profile_index, ring, tol)
+        return self.face_from_edges([edge], profile_index)
 
     def contact_edges(self, profile_index: int = 0):
         """
@@ -735,8 +877,11 @@ class Extrude:
         if side == 'opposite':
             n = _scale(n, -1.0)
 
-        u0 = _unit_vector(_subtract(profile.vertices[1], profile.vertices[0]))
-        v0 = _unit_vector(_cross(n, u0))
+        if hasattr(profile, "vertices"):
+            u0 = _unit_vector(_subtract(profile.vertices[1], profile.vertices[0]))
+            v0 = _unit_vector(_cross(n, u0))
+        else:
+            u0, v0 = _plane_basis(n)
 
         theta = radians(spin)
         cos_t, sin_t = cos(theta), sin(theta)
@@ -751,6 +896,104 @@ class Extrude:
         origin = _add(origin, _scale(n, lift))
 
         return Frame(origin, u, v, n)
+
+    def radial_pattern_frames(
+        self,
+        count: int,
+        circle_radius: float,
+        profile_index: int = 0,
+        side: str = 'same',
+        start_angle: float = 0.0,
+        spin_along_radius: bool = True,
+        lift=None,
+    ):
+        """
+        N Frame, равномерно расположенных по окружности радиуса circle_radius
+        на грани профиля - аналог center_frame(), но для паттерна деталей,
+        прикрепляемых по кругу (например ножки, рёбра жёсткости, бобышки
+        под болты). Каждый Frame передавай по очереди в attach(frame=...).
+
+        count             - число позиций.
+        circle_radius     - радиус окружности размещения (мм) от центра профиля.
+        side              - 'same'/'opposite', как в center_frame().
+        start_angle       - угол первой позиции, градусы (0 = вдоль u0 профиля).
+        spin_along_radius - если True (по умолчанию), каждый Frame развёрнут
+            так, что его u смотрит РАДИАЛЬНО НАРУЖУ (удобно, если build()
+            строит деталь "растущей от центра", например ребро жёсткости) -
+            если False, все Frame имеют одинаковую ориентацию, как обычный
+            center_frame(spin=0), только сдвинутые по позиции.
+        lift              - как в center_frame().
+        """
+        if count < 1:
+            raise ValueError("radial_pattern_frames(): count должен быть >= 1.")
+        if circle_radius <= 0:
+            raise ValueError("radial_pattern_frames(): circle_radius должен быть положительным.")
+
+        frames = []
+        for i in range(count):
+            angle = start_angle + 360.0 * i / count
+            if spin_along_radius:
+                spin = angle
+                du, dv = circle_radius, 0.0
+            else:
+                spin = 0.0
+                theta = radians(angle)
+                du = circle_radius * cos(theta)
+                dv = circle_radius * sin(theta)
+            frames.append(
+                self.center_frame(
+                    profile_index=profile_index, side=side,
+                    spin=spin, du=du, dv=dv, lift=lift
+                )
+            )
+        return frames
+
+    def radial_frame(
+        self,
+        profile_index: int = 0,
+        angle: float = 0.0,
+        t: float = 0.5,
+        lift: float = 0.0,
+    ):
+        """
+        Frame в точке на боковой (цилиндрической) поверхности экструзии
+        профиля-круга - аналог anchor(), но для круглого профиля, где нет
+        именованных рёбер.
+
+        angle — угол вокруг оси цилиндра, в градусах (0 соответствует
+                произвольному, но фиксированному направлению базиса
+                профиля - см. _plane_basis).
+        t     — положение вдоль высоты цилиндра, доля 0..1
+                (0 = нижнее основание, 1 = верхнее).
+        lift  — зазор вдоль итоговой нормали (наружу от поверхности) -
+                приподнять/утопить деталь относительно боковой стенки.
+
+        Возвращает Frame: origin - на поверхности цилиндра на заданных
+        angle/t; normal смотрит НАРУЖУ (радиально) - деталь, построенная
+        через build(frame) в attach(), будет расти от поверхности наружу;
+        u - вдоль оси цилиндра (self.direction); v - по касательной
+        к окружности.
+        """
+        profile = self.profiles[profile_index]
+        radius = getattr(profile, "radius", None)
+        center = getattr(profile, "center", None)
+        if radius is None or center is None:
+            raise ValueError(
+                "radial_frame(): профиль должен быть Circle (нужны атрибуты "
+                "radius и center)."
+            )
+
+        axis = _unit_vector(self.direction)
+        u0, v0 = _plane_basis(axis)
+
+        theta = radians(angle)
+        radial = _add(_scale(u0, cos(theta)), _scale(v0, sin(theta)))
+        tangent = _add(_scale(u0, -sin(theta)), _scale(v0, cos(theta)))
+
+        origin = _add(center, _scale(axis, t * self.height))
+        origin = _add(origin, _scale(radial, radius + lift))
+
+        return Frame(origin, u=axis, v=tangent, normal=radial)
 
     def attach(
         self,

@@ -127,6 +127,8 @@ class Boolean:
             raise ValueError("Boolean: target не содержит ни одного тела.")
         if not tool_bodies:
             raise ValueError("Boolean: tools не содержит ни одного тела.")
+        if tolerance <= 0:
+            raise ValueError(f"Boolean: tolerance должен быть положительным, получено {tolerance}.")
 
         # запоминаем рёбра ДО операции, пока оба тела ещё существуют
         before_sigs = _edge_signatures(target_bodies) | _edge_signatures(tool_bodies)

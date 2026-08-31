@@ -13,7 +13,7 @@ SYSTEM_BASE = PROMPTS_DIR / "system_base.txt"
 OUTPUT_FILE = GENERATED_DIR / "result.py"
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "qwen3-coder:30b-a3b-q4_K_M"
+MODEL = "qwen2.5-coder:14b"
 
 LOG_MAX_AGE_DAYS = 14  # логи старше этого возраста удаляются при каждом запуске
 
@@ -39,7 +39,9 @@ from nx_primitives import (
     Intersect,
     Boolean,
     Frame,
+    Chamfer,
     Hide,
+    Shell,
     rect_profile,
     attachment_seam,
     edges_after_boolean,
@@ -47,6 +49,7 @@ from nx_primitives import (
     edges_near,
     center_hole,
     holes_in_row,
+    holes_in_circle,
     attach_plate_seam, 
     gap_offset
 )

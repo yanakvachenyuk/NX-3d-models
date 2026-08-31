@@ -29,6 +29,10 @@ def triangle_by_3_sides(
     side_b — сторона между p1 и p3.
     side_c — сторона между p2 и p3.
     """
+
+    if side_a <= 0 or side_b <= 0 or side_c <= 0:
+        raise ValueError("triangle_by_3_sides: стороны должны быть положительными.")
+
     if (side_a + side_b <= side_c) or (side_a + side_c <= side_b) or (side_b + side_c <= side_a):
         raise ValueError("Треугольник с такими сторонами не существует")
 
@@ -110,6 +114,13 @@ def parallelogram_points(
     - прямоугольник: side_a != side_b, angle == 90
     - ромб: side_a == side_b, angle != 90
     """
+    if side_a <= 0 or side_b <= 0:
+        raise ValueError("parallelogram_points: стороны должны быть положительными.")
+    if not (0 < angle < 180):
+        raise ValueError(
+            f"parallelogram_points: angle должен быть в диапазоне (0, 180), получено {angle}."
+        )
+    
     angle_rad = radians(angle)
 
     p1 = (0.0, 0.0)

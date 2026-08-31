@@ -335,3 +335,47 @@ tab = box.attach(
     lambda f: rect_profile(workPart, f, length=8.0, width=8.0, u0=0.5, v0=0.0),
     thickness=4.0, frame=frame,
 )
+
+--- Пример: цилиндр + скругление/фаска торцов ---
+cyl = Extrude(workPart, [Circle(workPart, radius=20.0, center=(0.0, 0.0))],
+              height=30.0, direction=(0.0, 0.0, 1.0))
+Fillet(workPart, cyl, [cyl.circular_edge(ring='bottom')], radius=2.0)
+Chamfer(workPart, cyl, [cyl.circular_edge(ring='top')], setback=1.5)
+
+--- Пример: коробка + оболочка (открыта сверху) ---
+base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
+box = Extrude(workPart, [base], height=25.0, direction=(0.0, 0.0, 1.0))
+Shell(workPart, box, faces=[box.top_face()], thickness=2.0)
+
+--- Пример: цилиндр + оболочка (открыт сверху, торцевая грань) ---
+cyl = Extrude(workPart, [Circle(workPart, radius=15.0, center=(0.0, 0.0))],
+              height=20.0, direction=(0.0, 0.0, 1.0))
+Shell(workPart, cyl, faces=[cyl.circular_face(ring='top')], thickness=2.0)
+
+--- Пример: N рёбер жёсткости по кругу на грани (radial_pattern_frames) ---
+base = Parallelogram(workPart, side_a=100.0, side_b=100.0, angle=90.0)
+plate = Extrude(workPart, [base], height=5.0)
+# 6 боссов 10x10 по окружности радиусом 35 мм на верхней грани
+frames = plate.radial_pattern_frames(count=6, circle_radius=35.0)
+bosses = [
+    plate.attach(
+        lambda f: rect_profile(workPart, f, length=10.0, width=10.0, u0=0.5, v0=0.5),
+        thickness=4.0, frame=fr,
+    )
+    for fr in frames
+]
+
+--- Пример: деталь сбоку цилиндра (radial_frame) ---
+cyl = Extrude(workPart, [Circle(workPart, radius=25.0, center=(0.0, 0.0))],
+              height=40.0, direction=(0.0, 0.0, 1.0))
+# угол 45° вокруг оси, на середине высоты (t=0.5); v0=0.0, как у anchor
+frame = cyl.radial_frame(angle=45.0, t=0.5)
+tab = cyl.attach(
+    lambda f: rect_profile(workPart, f, length=10.0, width=8.0, u0=0.5, v0=0.0),
+    thickness=6.0, frame=frame,
+)
+
+--- Пример: пластина с уклоном стенок (draft_angle) ---
+base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
+# «литейный уклон 5°» -> draft_angle=5.0, явно указано в запросе
+plate = Extrude(workPart, [base], height=10.0, direction=(0.0, 0.0, 1.0), draft_angle=5.0)

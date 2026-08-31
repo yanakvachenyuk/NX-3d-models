@@ -7,6 +7,7 @@ from .shapes import (
 )
 from .extrude_core import Extrude, rect_profile
 from .fillet import Fillet
+from .chamfer import Chamfer
 from .boolean_ops import Union, Subtract, Intersect, Boolean
 from .edges_helpers import (
     edges_near,
@@ -15,9 +16,10 @@ from .edges_helpers import (
     edges_after_boolean,
     attach_plate_seam
 )
-from .holes import center_hole, holes_in_row
+from .holes import center_hole, holes_in_row, holes_in_circle
 from .geometry import Frame, gap_offset
 from .display import Hide
+from .shell import Shell
 
 __all__ = [
     "Profile",
@@ -29,12 +31,14 @@ __all__ = [
     "Parallelogram",
     "Extrude",
     "Fillet",
+    "Chamfer",
     "Hide",
     "Union",
     "Subtract",
     "Intersect",
     "Boolean",
     "Frame",
+    "Shell",
     "rect_profile",
     "edges_near",
     "edges_in_box",
@@ -42,6 +46,7 @@ __all__ = [
     "edges_after_boolean",
     "center_hole",
     "holes_in_row",
+    "holes_in_circle",
     "attach_plate_seam",
     "gap_offset",
 ]

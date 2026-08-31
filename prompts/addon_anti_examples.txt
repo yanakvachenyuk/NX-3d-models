@@ -230,3 +230,28 @@ holes = [
     Circle(workPart, radius=3.0, center=base.point_from_center( dx,  dy)),
 ]
 plate = Extrude(workPart, [base] + holes, height=...)
+
+# Плохо — у Chamfer нет параметра radius:
+Chamfer(workPart, box, ["aa1", "bb1"], radius=1.0)
+# Хорошо:
+Chamfer(workPart, box, ["aa1", "bb1"], setback=1.0)
+
+# Плохо — Shell с телом вместо граней:
+Shell(workPart, box, faces=[box.body], thickness=2.0)
+# Хорошо — грань через top_face()/bottom_face()/side_face():
+Shell(workPart, box, faces=[box.top_face()], thickness=2.0)
+
+# Плохо — буквенное имя ребра для цилиндра (Circle-профиль):
+Fillet(workPart, cyl, ["ab"], radius=1.0)   # у круга нет вершин a,b...
+# Хорошо:
+Fillet(workPart, cyl, [cyl.circular_edge(ring='top')], radius=1.0)
+
+# Плохо — holes_in_circle для твёрдых деталей (это только отверстия):
+bosses = holes_in_circle(workPart, base, radii=5.0, circle_radius=30.0, n=6)
+# Хорошо — твёрдые детали по кругу:
+frames = plate.radial_pattern_frames(count=6, circle_radius=30.0)
+bosses = [
+    plate.attach(lambda f: rect_profile(workPart, f, 10.0, 10.0, u0=0.5, v0=0.5),
+                 thickness=4.0, frame=fr)
+    for fr in frames
+]

@@ -1,5 +1,6 @@
 """Отверстия (из original solid.py)."""
 from __future__ import annotations
+from math import radians, cos, sin
 
 from .curves import Circle
 
@@ -18,6 +19,11 @@ def center_hole(workPart, radius: float, length: float,
     Пример:
         holes=[center_hole(workPart, radius=2.0, length=10.0, distance_from_seam=3.0)]
     """
+    if radius <= 0:
+        raise ValueError(f"center_hole: radius должен быть положительным, получено {radius}.")
+    if length <= 0:
+        raise ValueError(f"center_hole: length должен быть положительным, получено {length}.")
+    
     def build(f):
         u_val = u if u is not None else length / 2.0
         if v is not None:
@@ -93,7 +99,9 @@ def holes_in_row(workPart, profile, radii, gap: float, y: float = 0.0,
     n = len(radii)
     if n < 1:
         raise ValueError("holes_in_row(): список radii пуст.")
-
+    for r in radii:
+        if r <= 0:
+            raise ValueError(f"holes_in_row: радиус должен быть положительным, получено {r}.")
     # --- вычисление стартовой X-координаты ряда ---
     if x0 is not None:
         start_x = x0
@@ -124,6 +132,56 @@ def holes_in_row(workPart, profile, radii, gap: float, y: float = 0.0,
         result.append(Circle(workPart, radius=r, center=profile.point_from_center(x, y)))
     return result
 
+def holes_in_circle(workPart, profile, radii, circle_radius: float,
+                     n: int = None, start_angle: float = 0.0,
+                     center=(0.0, 0.0)):
+    """
+    Готовые Circle для N отверстий, равномерно расположенных по окружности
+    (болтовой круг) радиуса circle_radius, вокруг center (смещение от
+    центра profile - как в holes_in_row).
+
+    radii:
+        - список чисел (длина списка = число отверстий), ЛИБО
+        - одно число - тогда ОБЯЗАТЕЛЕН n= (сколько отверстий создать),
+          все N отверстий получат этот радиус.
+
+    start_angle - угол ПЕРВОГО отверстия, в градусах, от оси X профиля
+                  (0 = вправо от center), далее отверстия идут против
+                  часовой стрелки с равным шагом 360/n.
+
+    Возвращает список ГОТОВЫХ Circle - используй как и holes_in_row:
+        Extrude(workPart, [base] + holes_in_circle(workPart, base, radii=3.0, circle_radius=40.0, n=6), ...)
+    """
+    if isinstance(radii, (int, float)):
+        if n is None:
+            raise ValueError(
+                "holes_in_circle(): если radii - одно число, нужно указать n= "
+                "(сколько отверстий создать)."
+            )
+        radii = [float(radii)] * n
+    elif n is not None and n != len(radii):
+        raise ValueError(
+            f"holes_in_circle(): n={n} не совпадает с длиной radii ({len(radii)})."
+        )
+
+    n = len(radii)
+    if n < 1:
+        raise ValueError("holes_in_circle(): список radii пуст.")
+
+    if circle_radius <= 0:
+        raise ValueError("holes_in_circle(): circle_radius должен быть положительным.")
+
+    for r in radii:
+        if r <= 0:
+            raise ValueError(f"holes_in_circle(): радиус должен быть положительным, получено {r}.")
+
+    result = []
+    for i, r in enumerate(radii):
+        theta = radians(start_angle + 360.0 * i / n)
+        x = center[0] + circle_radius * cos(theta)
+        y = center[1] + circle_radius * sin(theta)
+        result.append(Circle(workPart, radius=r, center=profile.point_from_center(x, y)))
+    return result
 
 def width_default_error():
     raise ValueError(

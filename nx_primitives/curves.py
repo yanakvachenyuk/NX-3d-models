@@ -100,6 +100,8 @@ class Line(Profile):
         start,
         end
     ):
+        if tuple(start) == tuple(end):
+            raise ValueError(f"Line: начало и конец совпадают ({start}) - вырожденный отрезок.")
 
         self.start = start
         self.end = end
@@ -235,7 +237,9 @@ class Circle(Profile):
     """
 
     def __init__(self, workPart, radius, center=(0.0, 0.0), normal=(0.0, 0.0, 1.0)):
-
+        if radius <= 0:
+            raise ValueError(f"Circle: radius должен быть положительным, получено {radius}.")
+        
         self.radius = radius
 
         if len(center) == 2:
