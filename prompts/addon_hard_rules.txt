@@ -1,11 +1,12 @@
 ======================================================================
 ЖЁСТКИЕ ПРАВИЛА (проверяй перед КАЖДЫМ Fillet(...) и КАЖДЫМ
 Union/Subtract/Intersect, а также перед КАЖДОЙ lambda внутри attach())
+Перевод формулировок запроса в параметры — см. addon_mapping. Здесь —
+только структурные ограничения самого API.
 ======================================================================
-1. Не добавляй Union/Subtract/Intersect, если пользователь явно не
-   просил объединить тела / получить единое тело.
-2. Не добавляй Fillet, если пользователь явно не просил скругление /
-   радиус / fillet / «скруглить».
+1. Не добавляй Union/Subtract/Intersect без явного «объединить» /
+   «единое тело» в USER REQUEST.
+2. Не добавляй Fillet без явного «скруглить» / «радиус» / fillet.
 3. Если тело X было передано как tools в Union/Subtract/Intersect
    ВЫШЕ по коду, то ПОСЛЕ этой строки:
      - Fillet(workPart, X, [...], radius) для именованных рёбер ЗАПРЕЩЁН.
@@ -32,166 +33,123 @@ Union/Subtract/Intersect, а также перед КАЖДОЙ lambda внут�
        verticals_a = big_box.vertical_edges()
        verticals_b = small_box.edges_on(merged.body, small_box.vertical_edges())
        Fillet(workPart, big_box, verticals_a + verticals_b, radius=1.0)
-9. Три паттерна присоединения — не смешивать:
+9. Три паттерна присоединения — не смешивать (перевод фраз → см.
+   addon_mapping п.0-4; здесь — сама структура паттерна):
       ПАТТЕРН A — «плашмя» / НА грани (center_frame):
-     u0=0.5, v0=0.5
-     смещение по грани — du, dv
-     шов = attachment_seam(child, merged.body)
-   ПАТТЕРН B — «от ребра» (anchor + attach):
-     v0=0.0
-     u0=0.0 если «только вперёд / отступ без центрирования»
-     u0=0.5 если явно «по центру / симметрично»
-     шов = contact_edges() + edges_on, НЕ attachment_seam
-   attach_plate — стенки/борты во всю длину ребра:
-    width = высота, thickness = толщина, length=None
-    шов после Union = attach_plate_seam(wall, plate, merged.body,
-                                        side=..., edge_name=...)
-    НЕ merged.new_edges, НЕ attachment_seam
-    Fillet(workPart, plate, edges, radius=...)
-10. ГРАНИ ТЕПЕРЬ МОЖНО АДРЕСОВАТЬ НАПРЯМУЮ. "ab" - это РЕБРО (низ
-    боковой грани). "abb1a1" - это ГРАНЬ (вся боковая грань между
-    рёбрами "ab" снизу и "a1b1" сверху) - anchor()/attach_plate()
-    принимают ОБА варианта одинаково, разница только в том, что
-    подразумевал пользователь в запросе:
+        u0=0.5, v0=0.5; смещение по грани — du, dv;
+        шов = attachment_seam(child, merged.body)
+      ПАТТЕРН B — «от ребра» (anchor + attach):
+        v0=0.0; u0=0.0 если «только вперёд/отступ без центрирования»,
+        u0=0.5 если явно «по центру/симметрично»;
+        шов = contact_edges() + edges_on, НЕ attachment_seam
+      attach_plate — стенки/борты во всю длину ребра:
+        width = высота, thickness = толщина, length=None;
+        шов после Union = attach_plate_seam(wall, plate, merged.body,
+                                            side=..., edge_name=...);
+        НЕ merged.new_edges, НЕ attachment_seam;
+        Fillet(workPart, plate, edges, radius=...)
+10. ГРАНИ МОЖНО АДРЕСОВАТЬ НАПРЯМУЮ. "ab" — это РЕБРО (низ боковой
+    грани). "abb1a1" — это ГРАНЬ (вся боковая грань между рёбрами
+    "ab" снизу и "a1b1" сверху). anchor()/attach_plate() принимают
+    ОБА варианта одинаково:
       "к ребру ab" / "от стороны ab" -> используй "ab"
       "к грани abb1a1" / "на боковой грани" -> используй "abb1a1"
-    Для позиционирования (offset/t/angle) разницы НЕТ - оба сводятся
-    к одному и тому же Frame. Extrude.side_faces() возвращает список
-    всех имён боковых граней профиля, если нужно узнать их заранее.
+    Для offset/t/angle разницы нет — оба сводятся к одному Frame.
+    Extrude.side_faces() возвращает список имён всех боковых граней.
 11. ДВА РАЗНЫХ способа задать отверстия — не путать:
     - holes=[lambda f: ...] — ТОЛЬКО параметр attach()/attach_plate().
       Элементы списка — ФУНКЦИИ (frame->Profile), вызываются автоматически.
     - Extrude(workPart, [base, hole1, hole2], ...) — прямое построение.
       Элементы списка (после base) — ГОТОВЫЕ построенные объекты
-      (Circle(...), уже вызванный), НЕ функции/лямбды. Здесь нет frame,
-      который можно передать в lambda — если написать
-      lambda f: Circle.on_frame(...) внутри списка profiles у Extrude(),
-      получится AttributeError: 'function' object has no attribute 'curves'.
+      (Circle(...), уже вызванный), НЕ функции/лямбды. lambda внутри
+      этого списка даёт AttributeError: 'function' object has no
+      attribute 'curves'.
         НЕПРАВИЛЬНО: Extrude(workPart, [base] + [lambda f: Circle.on_frame(...)], ...)
         ПРАВИЛЬНО: hole = Circle(workPart, radius=..., center=base.point_from_center(...))
                       Extrude(workPart, [base, hole], ...)
 12. ОТВЕРСТИЯ В ПЛАСТИНЕ (Extrude с несколькими профилями)
-   - Все профили (внешний + отверстия) создаются ДО единственного Extrude.
-   - НИКОГДА не делай:
-        plate = Extrude(workPart, [base], ...)
-        holes = ...
-        plate2 = Extrude(workPart, [base] + holes, ...) # base уже использован!
-   - Правильно:
-        base = Parallelogram(...)
-        holes = holes_in_row(...) # или список Circle
-        plate = Extrude(workPart, [base] + holes, height=...)
-   - Координаты отверстий:
-        Parallelogram/Polygon по умолчанию ЦЕНТРИРОВАН в (0,0).
-        Центры отверстий задавать ТОЛЬКО через:
-            base.point_from_center(dx, dy)
-        или через holes_in_row(..., y=...), который сам использует point_from_center.
-        ЗАПРЕЩЕНО: Circle(..., center=(10,10)) / center=(70,10) и т.п. —
-        это координаты от угла, а не от центра.
-   - holes_in_row(workPart, profile, radii, gap, y=0.0):
-        y — смещение ОТ ЦЕНТРА профиля (не от края!).
-        Чтобы ряд был ближе к длинной стороне: y = ±(side_b/2 - margin).
-13. Минимальность для отверстий:
-    Если в запросе есть «отверстие/дырка/в ряд» — используй holes_in_row
-    или явный список Circle + point_from_center.
-    Не создавай лишний Extrude без отверстий.
-14. Отверстие в боссе / детали через center_frame:
+    - Все профили (внешний + отверстия) создаются ДО единственного Extrude.
+    - НИКОГДА не делай:
+         plate = Extrude(workPart, [base], ...)
+         holes = ...
+         plate2 = Extrude(workPart, [base] + holes, ...)  # base уже использован!
+    - Правильно:
+         base = Parallelogram(...)
+         holes = holes_in_row(...)  # или список Circle
+         plate = Extrude(workPart, [base] + holes, height=...)
+    - Координаты отверстий задавать ТОЛЬКО через base.point_from_center(dx, dy)
+      или через holes_in_row(..., y=...). ЗАПРЕЩЕНО: Circle(..., center=(10,10)) —
+      это координаты от угла, а не от центра.
+13. Минимальность для отверстий: если в запросе есть «отверстие/
+    дырка/в ряд» — используй holes_in_row или список Circle +
+    point_from_center. Не создавай лишний Extrude без отверстий.
+14. Отверстие в боссе через center_frame:
     holes=[lambda f: Circle.on_frame(workPart, R, f, u=0.0, v=0.0)]
-    НИКОГДА не используй center_hole() — он только для паттерна anchor + v0=0.
-    Отверстие передаётся ТОЛЬКО в том же attach(..., holes=...),
-    а не отдельным вызовом child.attach(...).
-15. Отверстие в стенке attach_plate:
-    Локальные оси frame:
-      u — вдоль ребра (0 … length)
-      v — вверх по высоте стенки (0 … width)
-    Центр отверстия:
-      u = length/2 (при length=None → длина ребра родителя / 2)
-      v = width/2
-    Пример: width=15, length=90 → u=45.0, v=7.5
-16. ОТВЕРСТИЕ В attach / attach_plate — ТОЛЬКО через параметр holes=
-   Правильно:
+    НИКОГДА не используй center_hole() — он только для паттерна
+    anchor + v0=0. Отверстие передаётся ТОЛЬКО в том же attach(...,
+    holes=...), а не отдельным вызовом child.attach(...).
+15. Отверстие в стенке attach_plate — локальные оси frame:
+      u — вдоль ребра (0 … length), v — вверх по высоте стенки (0 … width).
+      Центр: u = length/2 (при length=None → длина ребра родителя / 2),
+      v = width/2. Пример: width=15, length=90 → u=45.0, v=7.5.
+16. ОТВЕРСТИЕ В attach/attach_plate — ТОЛЬКО через параметр holes=,
+    заданный ВНУТРИ того же вызова:
        child = parent.attach(..., holes=[lambda f: Circle.on_frame(...)])
-       wall = parent.attach_plate(..., holes=[lambda f: Circle.on_frame(...)])
-   ЗАПРЕЩЕНО:
-       child = parent.attach(...) # без holes=
-       holes = [lambda f: ...] # список после вызова — он НИКОГДА не попадёт в тело
-       child.attach(lambda f: hole(f)) # второй attach для отверстия
-   Если в запросе есть слово «отверстие» / «дырка» — параметр holes= ОБЯЗАН быть внутри того же вызова attach/attach_plate.
-17. Координаты отверстия в attach_plate:
-       u — вдоль ребра (0 … length). При length=None length = длина ребра родителя.
-       v — вверх по высоте стенки (0 … width).
-       Центр: u = length/2, v = width/2.
-       Пример: ребро 90 мм, height=15 → u=45.0, v=7.5
-18. Координаты отверстия в боссе (center_frame + rect_profile u0=v0=0.5):
-       u=0.0, v=0.0
-       НИКОГДА не используй center_hole() для center_frame.
-    Union/Subtract/Intersect возвращают Boolean, НЕ Extrude.
-ЗАПРЕЩЕНО:
-  merged.anchor(...)
-  merged.attach(...)
-  merged.attach_plate(...)
-  plate.point_from_center() # point_from_center только у Profile (base)
-  point_from_center() определён ТОЛЬКО у ClosedProfile (Parallelogram,
-Triangle, Polygon) — у Circle такого метода НЕТ (Circle не имеет
-вершин, "центр" — это просто center=, переданный при создании). Если
-base = Circle(...) — координаты остальных отверстий указывай явными
-числами: center=(x, y), НЕ base.point_from_center(...).
-Цепочку «борт → полка → ухо» строй на Extrude ДО финального Union:
-  wall = plate.attach_plate(...)
-  shelf = wall.attach(...) # или wall.anchor + attach
-  ear = wall.attach(...)
-  merged = Union(workPart, plate, wall, shelf, ear)
-Отверстие в пластине:
-  hole = Circle(..., center=base.point_from_center())
-  plate = Extrude(workPart, [base, hole], height=...)
-  НЕ Extrude сначала, потом hole от plate.point_from_center()
-
-19. ЧИСЛА ИЗ ПРИМЕРОВ — НИКОГДА не копируй буквально.
-    Примеры в промпте показывают ПАТТЕРН (формулу/структуру кода), а
-    не конкретные числа. Если ты меняешь исходные размеры (side_a,
-    side_b, height и т.п.) относительно примера — ВСЕ производные
-    числа, посчитанные по формуле в этом примере, ОБЯЗАНЫ пересчитаться
-    от НОВЫХ размеров, а не остаться от примера.
-    ЗАПРЕЩЕНО оставлять в формуле жёстко зашитое число из примера,
-    если соответствующий размер в USER REQUEST другой.
+    ЗАПРЕЩЕНО: attach() без holes= с последующим отдельным списком/
+    вторым attach для отверстия — он никогда не попадёт в тело.
+17. Union/Subtract/Intersect возвращают Boolean (.body, .new_edges,
+    .removed_edges_count), а НЕ Extrude — у результата НЕТ find_edge/
+    anchor/attach/attach_plate. ЗАПРЕЩЕНО:
+      merged.anchor(...)
+      merged.attach(...)
+      merged.attach_plate(...)
+18. point_from_center() определён ТОЛЬКО у ClosedProfile (Parallelogram,
+    Triangle, Polygon) — НЕ у Extrude и НЕ у Circle:
+      plate.point_from_center()  # ЗАПРЕЩЕНО, plate — это Extrude
+      base.point_from_center()   # ПРАВИЛЬНО, base — Parallelogram/Triangle/Polygon
+    Если base = Circle(...) — координаты остальных отверстий указывай
+    явными числами center=(x, y): у Circle нет вершин и этого метода.
+19. Цепочку «борт → полка → ухо» строй на Extrude ДО финального Union:
+      wall = plate.attach_plate(...)
+      shelf = wall.attach(...)   # или wall.anchor + attach
+      ear = wall.attach(...)
+      merged = Union(workPart, plate, wall, shelf, ear)
+20. Отверстие в пластине строится ДО Extrude, от base:
+      hole = Circle(..., center=base.point_from_center())
+      plate = Extrude(workPart, [base, hole], height=...)
+    НЕ Extrude сначала, потом hole от plate.point_from_center() (см. п.18).
+21. ЧИСЛА ИЗ ПРИМЕРОВ — НИКОГДА не копируй буквально. Примеры в
+    промпте показывают ПАТТЕРН (формулу/структуру), а не конкретные
+    числа. Если ты меняешь исходные размеры (side_a, side_b, height
+    и т.п.) относительно примера — ВСЕ производные числа, посчитанные
+    по формуле, ОБЯЗАНЫ пересчитаться от НОВЫХ размеров.
     Пример ошибки: пример в промпте — «пластина 80×40 → dx=80/2-d,
-    dy=40/2-d». Если в запросе пластина 80×80, то НЕЛЬЗЯ писать
-    dy = 40.0/2 - d (это число 40 осталось от примера, не от запроса) —
-    нужно dy = 80.0/2 - d, т.к. side_b теперь 80, а не 40.
-    ПРОВЕРКА: после написания кода — свериться, что каждое число в
-    формулах (dx, dy, u, v, offset и т.п.) выведено из size_a/side_b/
-    height/length ТЕКУЩЕГО запроса, а не скопировано из примера.
-
+    dy=40/2-d». Если в запросе пластина 80×80, НЕЛЬЗЯ писать
+    dy=40.0/2-d (число 40 осталось от примера) — нужно dy=80.0/2-d.
+    ПРОВЕРКА: после написания кода свериться, что каждое число в
+    формулах выведено из размеров ТЕКУЩЕГО запроса, а не скопировано
+    из примера.
 
 ======================================================================
-ОТВЕРСТИЯ — ДВА РАЗНЫХ СПОСОБА (не путать)
+ОТВЕРСТИЯ — ДВА РАЗНЫХ СПОСОБА (не путать, сводная таблица)
 ======================================================================
+A) В ПЛАСТИНЕ/БРУСКЕ (в списке Extrude)
+   Circle + center=base.point_from_center(dx, dy), или holes_in_row(...).
+   dx, dy — мм ОТ ЦЕНТРА профиля. «По центру» → point_from_center(0,0).
+   НЕ Circle.on_frame, НЕ u=0.5/v=0.5.
 
-A) ОТВЕРСТИЕ В ПЛАСТИНЕ / БРУСКЕ (в списке Extrude)
-   - Circle + center=base.point_from_center(dx, dy)
-   - или holes_in_row(...)
-   - dx, dy — смещение В ММ ОТ ЦЕНТРА профиля (не от угла)
-   - «по центру» → point_from_center(0, 0) или point_from_center()
-   - НЕ Circle.on_frame для отверстий в базовой пластине
-   - НЕ u=0.5, v=0.5
+B) В СТЕНКЕ (attach_plate, holes=)
+   ТОЛЬКО holes=[lambda f: Circle.on_frame(workPart, R, f, u=..., v=...)].
+   u, v — ТОЛЬКО МИЛЛИМЕТРЫ (u вдоль ребра 0…length, v вверх 0…width).
+   «По центру стенки» → u=длина_ребра/2, v=width/2.
+   ЗАПРЕЩЕНО: u=0.5/v=0.5, center_hole(...), point_from_center.
 
-B) ОТВЕРСТИЕ В СТЕНКЕ (attach_plate, holes=)
-   - ТОЛЬКО: holes=[lambda f: Circle.on_frame(workPart, R, f, u=..., v=...)]
-   - u, v — ТОЛЬКО МИЛЛИМЕТРЫ, НИКОГДА доли 0..1
-   - u — вдоль ребра (0 … длина ребра; при length=None длина = side ребра родителя)
-   - v — вверх по высоте стенки (0 … width), width = высота стенки
-   - «по центру стенки» → u=длина_ребра/2, v=width/2
-     Пример: пластина 100×…, стенка height/width=20
-       → u=50.0, v=10.0
-   - ЗАПРЕЩЕНО: u=0.5, v=0.5  (это 0.5 мм от угла, НЕ центр)
-   - ЗАПРЕЩЕНО: center_hole(...) для стенки
-   - ЗАПРЕЩЕНО: point_from_center для отверстия в стенке
+C) В БОССЕ (center_frame + attach, holes=)
+   holes=[lambda f: Circle.on_frame(workPart, R, f, u=0.0, v=0.0)].
+   При rect_profile u0=0.5, v0=0.5 начало координат frame — в центре
+   босса, поэтому здесь u=0,v=0 — это и есть центр (не путать со
+   стенкой, где u=0,v=0 — угол).
 
-C) ОТВЕРСТИЕ В БОССЕ (center_frame + attach, holes=)
-   - holes=[lambda f: Circle.on_frame(workPart, R, f, u=0.0, v=0.0)]
-   - при rect_profile u0=0.5, v0=0.5 начало координат frame в ЦЕНТРЕ босса
-   - здесь u=0, v=0 — это центр босса (ОК)
-   - НЕ путать с стенкой, где u=0,v=0 — угол
-
-D) ОТВЕРСТИЕ В ПРИСТРОЕ СБОКУ (anchor + v0=0)
-   - «на расстоянии D от большой детали и по центру»
-     → center_hole(..., length=как у rect_profile, distance_from_seam=D)
+D) В ПРИСТРОЕ СБОКУ (anchor + v0=0)
+   «на расстоянии D от большой детали и по центру» → center_hole(...,
+   length=как у rect_profile, distance_from_seam=D).

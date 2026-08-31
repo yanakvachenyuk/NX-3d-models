@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<Dialog ContainerItems="1" Expanded="1" NX="2406" Saved="Mon Aug 17 15:21:45 2026 " class="" creator="user" id="Dialog" languageInfo="Language and Codeset: russian 14" name="Dialog" notes="" title="C:\Users\user\Desktop\NX-3d-models\new_ui.dlx" type="uicomp" version="1.0.0">
+<Dialog ContainerItems="1" Expanded="1" NX="2406" Saved="Mon Aug 17 15:21:45 2026 " class="" creator="user" id="Dialog" languageInfo="Language and Codeset: russian 14" name="Dialog" notes="" title="C:\Users\Chelik\Desktop\NX-3d-models\new_ui.dlx" type="uicomp" version="1.0.0">
     <item ContainerItems="1" Expanded="1" class="UGS::UI::Comp::WizardGroup" hierarchy="" id="group0" name="group0" notes="" presentation="Group" type="uicomp">
         <PropertyList>
             <Property class="UGS::UI::Comp::Container" dynamic="1" group="Block Specific::" hierarchy="UGS::UI::Comp::WizardGroup" id="Members" mask="0" name="Members" sname="Members" source="1" type="array">

@@ -16,6 +16,15 @@ FORBIDDEN_SNIPPETS = (
 
 _BOOLEAN_FUNC_NAMES = {"Union", "Subtract", "Intersect", "Boolean"}
 
+# "Triangle(" без точки перед скобкой — сырой __init__, запрещён ВСЕГДА,
+# независимо от запроса (Triangle.by_3_sides(... не матчится, т.к. там
+# после "Triangle" идёт ".by_3_sides(", а не "(" сразу).
+_RAW_TRIANGLE_CALL = re.compile(r"\bTriangle\s*\(")
+
+
+def _find_raw_triangle_call(code: str) -> bool:
+    return bool(_RAW_TRIANGLE_CALL.search(code))
+
 
 def _find_boolean_result_vars(tree: ast.AST) -> set[str]:
     boolean_vars: set[str] = set()
@@ -287,6 +296,39 @@ def _contains_any(text: str, words) -> bool:
     lowered = text.lower()
     return any(w in lowered for w in words)
 
+_FILLET_RE = re.compile(r"скругл|fillet|фаск|сглад|радиус\w*\s*скругл", re.I)
+_BOOL_RE = re.compile(r"объедин|единое\s+тело|слить|склеить|вычесть|пересеч", re.I)
+_HOLE_RE = re.compile(r"отверст|дыр|паз|hole|прорез|просверл", re.I)
+
+def _check_minimality(code: str, user_request: str) -> str | None:
+    req = user_request
+    errs = []
+    if "Fillet(" in code and not _FILLET_RE.search(req):
+        errs.append(
+            "В коде есть Fillet(...), в запросе нет слов про скругление — удали Fillet целиком."
+        )
+    if any(s in code for s in ("Union(", "Subtract(", "Intersect(")) and not _BOOL_RE.search(req):
+        errs.append(
+            "В коде есть Union/Subtract/Intersect, в запросе нет объединения — удали."
+        )
+    if "holes=" in code and not _HOLE_RE.search(req):
+        errs.append(
+            "В коде есть holes=, в запросе нет отверстия — удали holes=."
+        )
+    return " ".join(errs) if errs else None
+
+def _double_extrude_plate_holes(code: str) -> str | None:
+    """Отверстия в пластине: base нельзя скармливать двум Extrude."""
+    if code.count("Extrude(") < 2:
+        return None
+    if "Circle(" not in code or "point_from_center" not in code:
+        return None
+    return (
+        "Отверстия в пластине: только ОДИН Extrude(workPart, [base] + holes). "
+        "Нельзя сначала Extrude([base, hole]/…), потом второй Extrude с holes. "
+        "Удали первый Extrude; все Circle собери в один список holes и один Extrude."
+    )
+
 
 def check_minimality_warnings(code: str, user_request: str) -> list[str]:
     warnings: list[str] = []
@@ -318,6 +360,17 @@ def validate_code(code: str, user_request: str = "") -> str | None:
                 f"Код содержит запрещённый фрагмент '{snippet}'. "
                 "Session/workPart и импорты уже подставлены снаружи."
             )
+
+    if _find_raw_triangle_call(code):
+        return (
+            "Обнаружен вызов Triangle(workPart, ...) напрямую — такого __init__ "
+            "нет, конструктор ждёт три ТОЧКИ и падает на несовместимом формате "
+            "координат (например, 2D-точки вместо 3D). Треугольник строится "
+            "ТОЛЬКО через фабричные методы: Triangle.by_3_sides(...), "
+            "Triangle.by_2_sides_and_angle(...), Triangle.by_2_angles_and_side(...). "
+            "Удали сырой вызов Triangle(...) полностью (включая мёртвый код от "
+            "прошлых попыток) и замени его на подходящий фабричный метод."
+        )
 
     boolean_vars = _find_boolean_result_vars(tree)
     bad_fillets = _find_bad_fillet_extrude_args(tree, boolean_vars)
@@ -357,8 +410,12 @@ def validate_code(code: str, user_request: str = "") -> str | None:
                 "Сначала shelf = wall.attach(...), потом Union."
             )
 
-    minimality_errors = check_minimality_warnings(code, user_request)
-    if minimality_errors:
-        return " ".join(minimality_errors)
+    mini = _check_minimality(code, user_request)
+    if mini:
+        return mini
+
+    err = _double_extrude_plate_holes(code)
+    if err:
+        return err
 
     return None

@@ -1,6 +1,6 @@
-
 """Пути, модель, префикс result.py."""
 from pathlib import Path
+from datetime import datetime, timedelta
 
 PROJECT = Path(__file__).resolve().parent.parent
 
@@ -13,7 +13,9 @@ SYSTEM_BASE = PROMPTS_DIR / "system_base.txt"
 OUTPUT_FILE = GENERATED_DIR / "result.py"
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "qwen2.5-coder:14b"
+MODEL = "qwen3-coder:30b-a3b-q4_K_M"
+
+LOG_MAX_AGE_DAYS = 14  # логи старше этого возраста удаляются при каждом запуске
 
 RESULT_PREFIX = f"""import sys
 import os
@@ -56,3 +58,17 @@ workPart = theSession.Parts.Work
 GENERATED_DIR.mkdir(exist_ok=True)
 LOG_DIR.mkdir(exist_ok=True)
 PROMPTS_DIR.mkdir(exist_ok=True)
+
+
+def cleanup_old_logs(max_age_days: int = LOG_MAX_AGE_DAYS) -> int:
+    """Удаляет файлы логов старше max_age_days. Возвращает число удалённых файлов."""
+    cutoff = datetime.now() - timedelta(days=max_age_days)
+    removed = 0
+    for f in LOG_DIR.glob("*.txt"):
+        try:
+            if datetime.fromtimestamp(f.stat().st_mtime) < cutoff:
+                f.unlink()
+                removed += 1
+        except OSError:
+            pass
+    return removed

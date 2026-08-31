@@ -40,7 +40,7 @@ class ClosedProfile(Profile):
         n = len(vertices)
         cx = sum(v[0] for v in vertices) / n
         cy = sum(v[1] for v in vertices) / n
-        cz = sum(v[2] for v in vertices) / n
+        cz = sum(v[2] if len(v) > 2 else 0.0 for v in vertices) / n
         return (cx, cy, cz)
 
     def corner_point(self, index: int, offset: float):

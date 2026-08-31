@@ -10,10 +10,10 @@ import NXOpen.GeometricUtilities
 from .base import Profile, ClosedProfile
 from .geometry import _add, _subtract, _scale, _normalize3, _cross, Frame
 from .shapes import Polygon, Triangle, Parallelogram
-from .curves import Circle
-_LABELS = "abcdefghijklmnopqrstuvwxyz"
+from .curves import Circle, _plane_basis
 
 from .edges_helpers import (
+    _LABELS,
     _unit_vector,
     _points_equal,
     _parse_edge_name,
@@ -744,7 +744,7 @@ class Extrude:
         v = _add(_scale(u0, -sin_t), _scale(v0, cos_t))
 
         if lift is None:
-            lift = self.height
+            lift = self.height if side == 'same' else 0.0
 
         origin = _add(origin, _scale(u, du))
         origin = _add(origin, _scale(v, dv))

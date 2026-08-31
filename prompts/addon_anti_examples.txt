@@ -1,153 +1,60 @@
 ======================================================================
 ТИПИЧНЫЕ АНТИ-ПРИМЕРЫ (так делать НЕЛЬЗЯ)
 ======================================================================
-# Плохо: attach_plate не подходит для стенки с отступом (не на всю длину),
-# angle=-90 уводит стенку "вбок", а вручную придуманный direction
-# несовместим с реальными осями frame:
+# Плохо: attach_plate не подходит для стенки с отступом (не на всю
+# длину), и ручной direction несовместим с реальными осями frame:
 frame = plate.anchor("ab", offset=5.0, angle=-90.0)
 wall = plate.attach(
     lambda f: rect_profile(workPart, f, length=15.0, width=10.0, u0=0.0, v0=0.0),
-    thickness=3.0,
-    frame=frame,
-    direction=(-1.0, 0.0, 0.0),
+    thickness=3.0, frame=frame, direction=(-1.0, 0.0, 0.0),
 )
-# Хорошо: angle=0.0 (растёт вверх вдоль нормали пластины), direction
-# НЕ указываем вовсе — берём по умолчанию нормаль frame:
+# Хорошо: angle=0.0 (растёт вдоль нормали пластины), direction не указываем:
 frame = plate.anchor("ab", offset=5.0, angle=0.0)
 wall = plate.attach(
     lambda f: rect_profile(workPart, f, length=15.0, width=10.0, u0=0.0, v0=0.0),
-    thickness=3.0,
-    frame=frame,
+    thickness=3.0, frame=frame,
 )
-# ПЛОХО — center_hole для стенки / двойная lambda
+
+# Плохо — center_hole для стенки:
 holes=[lambda f: center_hole(workPart, radius=3.0, length=90.0, distance_from_seam=7.5)]
-# ХОРОШО — стенка attach_plate, отверстие по центру
+# Хорошо — стенка attach_plate, отверстие по центру (u=length/2, v=width/2):
 holes=[lambda f: Circle.on_frame(workPart, 3.0, f, u=45.0, v=7.5)]
-# u = length/2 (при length=None — длина ребра/2), v = width/2
-# Плохо: «левее центра» на верхней грани через anchor
+
+# Плохо: «левее центра» на верхней грани через anchor:
 frame = plate.anchor("ab", offset=30.0, angle=-90.0)
 # Хорошо:
 frame = plate.center_frame(side='same', du=-30.0)
-# Плохо: отверстие в боссе вторым attach / center_hole на center_frame
+
+# Плохо: отверстие в боссе вторым attach:
 boss = plate.attach(..., frame=plate.center_frame(...))
 boss.attach(..., holes=[center_hole(...)])
-# Хорошо:
+# Хорошо — holes в том же attach:
 boss = plate.attach(
-    ...,
-    frame=plate.center_frame(side='same', du=-30.0),
+    ..., frame=plate.center_frame(side='same', du=-30.0),
     holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)],
 )
-# Плохо: u0=0.5 при «отступ 4 мм и только вперёд»
-frame = box.anchor("ab", offset=4.0, angle=-90.0)
+
+# Плохо: u0=0.5 при «отступ 4 мм и только вперёд»:
 attach(..., lambda f: rect_profile(..., u0=0.5, v0=0.0), ...)
 # Хорошо:
-frame = box.anchor("ab", offset=4.0, angle=-90.0)
 attach(..., lambda f: rect_profile(..., u0=0.0, v0=0.0), ...)
-# Плохо: Fillet на Union
+
+# Плохо: Fillet на Union:
 merged = Union(workPart, big_box, small_box)
 Fillet(workPart, merged, ..., radius=1.0)
 # Хорошо:
 Fillet(workPart, big_box, ..., radius=1.0)
-# Плохо: attachment_seam при anchor
+
+# Плохо: attachment_seam при anchor:
 seam = attachment_seam(small_box, merged.body)
 # Хорошо при anchor:
 names = list(dict.fromkeys(small_box.contact_edges() + small_box.vertical_edges()))
 small_edges = small_box.edges_on(merged.body, names)
-# Плохо: v0=0.5 при anchor
+
+# Плохо: v0=0.5 при anchor:
 rect_profile(..., u0=0.0, v0=0.5)
 # Хорошо при anchor:
 rect_profile(..., u0=0.0, v0=0.0)
-# Плохо после attach_plate:
-seam = attachment_seam(wall, merged.body)
-Fillet(workPart, plate, merged.new_edges, radius=1.0)
-names = list(dict.fromkeys(wall.contact_edges()))
-edges = wall.edges_on(merged.body, names)
-Fillet(workPart, plate, edges, radius=1.0)
-
-# Хорошо после attach_plate:
-edges = attach_plate_seam(wall, plate, merged.body, side='outer', edge_name='ab')
-Fillet(workPart, plate, edges, radius=1.0)
-
-# «внешний и внутренний» / «оба шва»:
-edges = attach_plate_seam(wall, plate, merged.body, side='both', edge_name='ab')
-Fillet(workPart, plate, edges, radius=5.0)
-# Плохо: width/thickness перепутаны
-plate.attach_plate("ab", length=None, width=4.0, thickness=15.0) # ляжет
-# Хорошо: высота 15, толщина 4
-plate.attach_plate("ab", length=None, width=15.0, thickness=4.0)
-# Плохо:
-Fillet(workPart, merged.body, ...)
-Fillet(workPart, merged, ...)
-# Хорошо:
-Fillet(workPart, big_box, small_edges + big_box.vertical_edges(), radius=1.0)
-# Плохо (отверстие) — ручной счёт u/v, легко перепутать или забыть +radius:
-Circle.on_frame(..., u=3+2, v=4)
-lambda f: Circle.on_frame(workPart, 2.0, f, u=4.0, v=3.0) # u не центр, v без +radius
-# Хорошо — center_hole() считает сама, length совпадает с rect_profile:
-holes=[center_hole(workPart, radius=2.0, length=10.0, distance_from_seam=3.0)]
-# Плохо:
-small_base = Parallelogram(workPart, side_a=10, side_b=8, angle=90)
-small_box = small_base.Extrude(...) # нет такого метода
-small_box = Extrude(workPart, [small_base], height=5) # без attach — не на ребре
-# Хорошо:
-small_box = big_box.attach(
-    lambda f: rect_profile(workPart, f, length=10, width=8, u0=0, v0=0),
-    thickness=5.0,
-    frame=big_box.anchor("ab", offset=6.0, angle=-90.0),
-)
-# Запрос БЕЗ unify/fillet/hole — ПЛОХО дописывать:
-small_box = big_box.attach(..., holes=[...])
-merged = Union(...)
-Fillet(...)
-# ХОРОШО — только пристрой:
-small_box = big_box.attach(
-    lambda f: rect_profile(workPart, f, length=10.0, width=8.0, u0=0.0, v0=0.0),
-    thickness=5.0,
-    frame=big_box.anchor("ab", offset=6.0, angle=-90.0),
-)
-# ПЛОХО — абсолютные координаты + повторный Extrude с тем же base
-base = Parallelogram(workPart, side_a=80.0, side_b=80.0, angle=90.0)
-plate = Extrude(workPart, [base], height=4.0)
-holes = [Circle(workPart, radius=5.0, center=(10,10)), ...]
-plate2 = Extrude(workPart, [base] + holes, ...) # отверстия не вырежутся
-# ПЛОХО — attach_plate не принимает offset, и вообще не подходит для
-# стенки с отступом от начала ребра (не на всю длину):
-wall = plate.attach_plate("ab", length=15.0, width=10.0, thickness=3.0, offset=5.0)
-# ХОРОШО — стенка НЕ на всю длину + отступ = anchor(offset=...) + attach,
-# НЕ attach_plate:
-frame = plate.anchor("ab", offset=5.0, angle=0.0)
-wall = plate.attach(
-    lambda f: rect_profile(workPart, f, length=15.0, width=10.0, u0=0.0, v0=0.0),
-    thickness=3.0,
-    frame=frame,
-)
-
-
-
-# ПЛОХО — стенка, «по центру», но u,v как доли:
-holes=[lambda f: Circle.on_frame(workPart, 3.0, f, u=0.5, v=0.5)]
-# ХОРОШО — пластина 100, стенка height=20:
-holes=[lambda f: Circle.on_frame(workPart, 3.0, f, u=50.0, v=10.0)]
-
-# ПЛОХО — отверстие в пластине через on_frame / доли
-# ХОРОШО:
-hole = Circle(workPart, radius=5.0, center=base.point_from_center(0.0, 0.0))
-plate = Extrude(workPart, [base, hole], height=4.0)
-
-# ПЛОХО — отверстие «в пластине», но два Extrude + стенка к телу без дырки:
-plate = Extrude(workPart, [base], height=3.0)
-hole = Circle(workPart, radius=5.0, center=base.point_from_center())
-plate2 = Extrude(workPart, [base, hole], height=3.0)
-wall = plate.attach_plate(...)  # дырки нет, круг может быть виден
-
-# ПЛОХО — «отверстие в пластине» перенесено в holes= стенки:
-wall = plate.attach_plate(..., holes=[lambda f: Circle.on_frame(..., u=35, v=6)])
-
-# ПЛОХО — «у углов, отступ 10 от краёв» на 80×40:
-point_from_center(±10, ±10)   # не углы
-point_from_center(70, 30)     # вне пластины
-# ХОРОШО:
-point_from_center(±30, ±10)
 
 # Плохо после attach_plate — new_edges / ручной contact_edges / attachment_seam:
 Fillet(workPart, plate, merged.new_edges, radius=1.0)
@@ -155,7 +62,171 @@ names = list(dict.fromkeys(wall.contact_edges()))
 edges = wall.edges_on(merged.body, names)
 Fillet(workPart, plate, edges, radius=1.0)
 seam = attachment_seam(wall, merged.body)
-
-# Хорошо:
+# Хорошо после attach_plate:
 edges = attach_plate_seam(wall, plate, merged.body, side='outer', edge_name='ab')
 Fillet(workPart, plate, edges, radius=1.0)
+# «внешний и внутренний» / «оба шва»:
+edges = attach_plate_seam(wall, plate, merged.body, side='both', edge_name='ab')
+Fillet(workPart, plate, edges, radius=5.0)
+
+# Плохо: width/thickness перепутаны (стенка ляжет плашмя):
+plate.attach_plate("ab", length=None, width=4.0, thickness=15.0)
+# Хорошо — высота 15, толщина 4:
+plate.attach_plate("ab", length=None, width=15.0, thickness=4.0)
+
+# Плохо (отверстие) — ручной счёт u/v, легко перепутать/забыть +radius:
+lambda f: Circle.on_frame(workPart, 2.0, f, u=4.0, v=3.0)
+# Хорошо — center_hole() считает сама, length совпадает с rect_profile:
+holes=[center_hole(workPart, radius=2.0, length=10.0, distance_from_seam=3.0)]
+
+# Плохо — метода Extrude() у профиля нет:
+small_base = Parallelogram(workPart, side_a=10, side_b=8, angle=90)
+small_box = small_base.Extrude(...)
+small_box = Extrude(workPart, [small_base], height=5)  # без attach — не на ребре
+# Хорошо:
+small_box = big_box.attach(
+    lambda f: rect_profile(workPart, f, length=10, width=8, u0=0, v0=0),
+    thickness=5.0, frame=big_box.anchor("ab", offset=6.0, angle=-90.0),
+)
+
+# Запрос БЕЗ unify/fillet/hole — ПЛОХО дописывать их «на всякий случай»:
+small_box = big_box.attach(..., holes=[...])
+merged = Union(...)
+Fillet(...)
+# ХОРОШО — только пристрой, ничего лишнего:
+small_box = big_box.attach(
+    lambda f: rect_profile(workPart, f, length=10.0, width=8.0, u0=0.0, v0=0.0),
+    thickness=5.0, frame=big_box.anchor("ab", offset=6.0, angle=-90.0),
+)
+
+# ПЛОХО — абсолютные координаты + повторный Extrude с тем же base
+# (base уже использован, отверстия не вырежутся):
+base = Parallelogram(workPart, side_a=80.0, side_b=80.0, angle=90.0)
+plate = Extrude(workPart, [base], height=4.0)
+holes = [Circle(workPart, radius=5.0, center=(10, 10)), ...]
+plate2 = Extrude(workPart, [base] + holes, ...)
+
+# ПЛОХО — attach_plate не принимает offset и не подходит для стенки
+# с отступом от начала ребра (не на всю длину):
+wall = plate.attach_plate("ab", length=15.0, width=10.0, thickness=3.0, offset=5.0)
+# ХОРОШО — стенка не на всю длину + отступ = anchor(offset=...) + attach:
+frame = plate.anchor("ab", offset=5.0, angle=0.0)
+wall = plate.attach(
+    lambda f: rect_profile(workPart, f, length=15.0, width=10.0, u0=0.0, v0=0.0),
+    thickness=3.0, frame=frame,
+)
+
+# ПЛОХО — u,v как доли в отверстии стенки:
+holes=[lambda f: Circle.on_frame(workPart, 3.0, f, u=0.5, v=0.5)]
+# ХОРОШО — пластина 100, стенка height=20 → центр u=50, v=10:
+holes=[lambda f: Circle.on_frame(workPart, 3.0, f, u=50.0, v=10.0)]
+
+# ПЛОХО — отверстие «в пластине», но два Extrude + стенка к телу без дырки:
+plate = Extrude(workPart, [base], height=3.0)
+hole = Circle(workPart, radius=5.0, center=base.point_from_center())
+plate2 = Extrude(workPart, [base, hole], height=3.0)
+wall = plate.attach_plate(...)  # дырки нет
+# ПЛОХО — «отверстие в пластине» перенесено в holes= стенки:
+wall = plate.attach_plate(..., holes=[lambda f: Circle.on_frame(..., u=35, v=6)])
+# ХОРОШО:
+hole = Circle(workPart, radius=5.0, center=base.point_from_center(0.0, 0.0))
+plate = Extrude(workPart, [base, hole], height=4.0)
+
+# ПЛОХО — «у углов, отступ 10 от краёв» на 80×40:
+point_from_center(±10, ±10)   # не углы
+point_from_center(70, 30)     # вне пластины
+# ХОРОШО:
+point_from_center(±30, ±10)
+
+# Плохо: «ряд смещён от центра пластины по короткой стороне на N мм»
+# спутано с align/edge_offset (это смещение ВДОЛЬ ряда, не сдвиг ряда целиком):
+holes = holes_in_row(workPart, base, radii=2.5, gap=20.0, n=4,
+                      align='start', edge_offset=15.0)
+
+# Хорошо — весь ряд сдвинут поперёк через y=, раскладка внутри ряда не меняется:
+holes = holes_in_row(workPart, base, radii=2.5, gap=20.0, n=4, y=15.0)
+
+# Плохо: «выступ AxBxC сбоку от ребра», в запросе НЕТ слова «отступ» —
+# но offset придуман из размера B выступа, и angle=0.0 вместо -90.0
+# (деталь растёт вверх от грани, а не вбок от ребра):
+frame = plate.anchor("bc", offset=8.0, angle=0.0)
+small_box = plate.attach(
+    lambda f: rect_profile(workPart, f, length=10.0, width=8.0, u0=0.0, v0=0.0),
+    thickness=5.0, frame=frame,
+)
+# Хорошо — «сбоку» → angle=-90.0; отступа в запросе нет → offset остаётся 0.0:
+frame = plate.anchor("bc", offset=0.0, angle=-90.0)
+small_box = plate.attach(
+    lambda f: rect_profile(workPart, f, length=10.0, width=8.0, u0=0.0, v0=0.0),
+    thickness=5.0, frame=frame,
+)
+
+# Плохо — «выступ от ребра» с angle=0 (растёт вверх/внутрь, не вбок):
+frame = box.anchor("bc", offset=6.0, angle=0.0)
+# Хорошо — выступ от ребра → angle=-90:
+frame = box.anchor("bc", offset=6.0, angle=-90.0)
+
+# Плохо: angle=-90.0 уже растит деталь корректно вбок от ребра, но
+# явный direction=tuple(-c for c in frame.normal) ГАСИТ это направление
+# и разворачивает рост обратно (паттерн из "Пример 3" скопирован не туда -
+# там angle=0.0, а не -90.0):
+frame = box.anchor("bc", offset=6.0, angle=-90.0)
+outward = tuple(-c for c in frame.normal)
+extension = box.attach(
+    lambda f: rect_profile(workPart, f, length=6.0, width=25.0, u0=0.0, v0=0.0),
+    thickness=25.0, frame=frame, direction=outward,
+)
+# Хорошо: angle=-90.0 сам по себе достаточен, direction= не указываем:
+frame = box.anchor("bc", offset=6.0, angle=-90.0)
+extension = box.attach(
+    lambda f: rect_profile(workPart, f, length=6.0, width=25.0, u0=0.0, v0=0.0),
+    thickness=25.0, frame=frame,
+)
+
+# ВАЖНО: Пример 3 из addon_examples — ЕДИНСТВЕННЫЙ случай, когда direction=
+# допустим (там angle=0.0). При angle=-90.0 direction= ЗАПРЕЩЁН всегда.
+
+# Плохо — «свободные вертикали» через vertical_edges() (там есть шов aa1/bb1):
+Fillet(workPart, ext, ext.vertical_edges(), radius=1.0)
+# Хорошо:
+Fillet(workPart, ext, ["cc1", "dd1"], radius=1.0)
+
+# Плохо — «выступ/пристрой от ребра» с angle=0:
+frame = box.anchor("ab", offset=5.0, angle=0.0)
+# Хорошо — от ребра без «вверх» → angle=-90:
+frame = box.anchor("ab", offset=5.0, angle=-90.0)
+
+# Плохо — копировать Union/Fillet из примера, если в запросе нет этих слов:
+merged = Union(workPart, plate, boss)
+Fillet(workPart, plate, attachment_seam(boss, merged.body), radius=1.0)
+# Хорошо — только то, что есть в запросе:
+boss = plate.attach(..., frame=plate.center_frame(...))
+
+# Плохо — отверстия в пластине вторым Extrude (base уже использован):
+plate = Extrude(workPart, [base], height=4.0)
+holes = [Circle(..., center=base.point_from_center(...))]
+plate2 = Extrude(workPart, [base] + holes, height=4.0)
+# Хорошо — один Extrude, все профили сразу:
+holes = [Circle(..., center=base.point_from_center(...))]
+plate = Extrude(workPart, [base] + holes, height=4.0)
+
+# Плохо — отверстия в пластине двумя Extrude (base уже использован, дырок нет):
+hole = Circle(workPart, radius=3.0, center=base.point_from_center())
+plate = Extrude(workPart, [base, hole], height=4.0)
+holes = [Circle(..., center=base.point_from_center(±dx, ±dy)), ...]
+plate = Extrude(workPart, [base] + holes, height=4.0)
+
+# Плохо — лишнее отверстие по центру, если в запросе только «по углам»:
+holes = [Circle(..., center=base.point_from_center())]  # центр не просили
++ угловые
+
+# Хорошо — один Extrude, только то, что в запросе:
+d = ...
+dx, dy = side_a/2 - d, side_b/2 - d
+holes = [
+    Circle(workPart, radius=3.0, center=base.point_from_center(-dx, -dy)),
+    Circle(workPart, radius=3.0, center=base.point_from_center( dx, -dy)),
+    Circle(workPart, radius=3.0, center=base.point_from_center(-dx,  dy)),
+    Circle(workPart, radius=3.0, center=base.point_from_center( dx,  dy)),
+]
+plate = Extrude(workPart, [base] + holes, height=...)

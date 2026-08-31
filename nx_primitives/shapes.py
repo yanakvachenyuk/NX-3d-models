@@ -93,6 +93,7 @@ class Polygon(ClosedProfile):
     """
 
     def __init__(self, workPart, vertices: list):
+        vertices = [(v[0], v[1], v[2] if len(v) > 2 else 0.0) for v in vertices]
         n = len(vertices)
         lines = []
 

@@ -7,6 +7,8 @@ import requests
 
 from .config import MODEL, OLLAMA_URL
 
+DEFAULT_TIMEOUT = 400  # согласовано с max_attempts в run.py и subprocess timeout в new_ui.py
+
 
 def cleanup_response(text: str) -> str:
     text = text.strip()
@@ -16,7 +18,7 @@ def cleanup_response(text: str) -> str:
     return text.strip()
 
 
-def generate(prompt: str) -> str:
+def generate(prompt: str, timeout: int = DEFAULT_TIMEOUT) -> str:
     payload = {
         "model": MODEL,
         "prompt": prompt,
@@ -25,7 +27,7 @@ def generate(prompt: str) -> str:
             "num_ctx": 16384,
         },
     }
-    response = requests.post(OLLAMA_URL, json=payload, timeout=600)
+    response = requests.post(OLLAMA_URL, json=payload, timeout=timeout)
     response.raise_for_status()
     data = response.json()
     if "response" not in data:
