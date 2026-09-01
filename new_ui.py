@@ -18,8 +18,10 @@ import NXOpen.BlockStyler
 import subprocess
 import json
 import os
+from pathlib import Path
+
 # --- НАСТРОЙКИ ПОД КОНКРЕТНУЮ МАШИНУ (проверить при переносе проекта) ------
-PROJECT_ROOT = r"C:\Users\User\Desktop\NX-3d-models"
+PROJECT_ROOT = str(Path(__file__).resolve().parent)
 PYTHON_EXE = r"C:\Users\user\AppData\Local\Programs\Python\Python313\python.exe"
 GENERATE_SCRIPT = PROJECT_ROOT + r"\generate.py"
 RESULT_PATH = PROJECT_ROOT + r"\generated\result.py"

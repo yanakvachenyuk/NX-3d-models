@@ -2,6 +2,24 @@
 from pathlib import Path
 from datetime import datetime, timedelta
 
+# PROJECT = Path(__file__).resolve().parent.parent
+
+# LIBRARY_DIR = PROJECT / "nx_primitives"
+# PROMPTS_DIR = PROJECT / "prompts"
+# GENERATED_DIR = PROJECT / "generated"
+# LOG_DIR = PROJECT / "logs"
+
+# SYSTEM_BASE = PROMPTS_DIR / "system_base.txt"
+# OUTPUT_FILE = GENERATED_DIR / "result.py"
+
+# OLLAMA_URL = "http://localhost:11434/api/generate"
+# MODEL = "qwen2.5-coder:14b"
+
+# LOG_MAX_AGE_DAYS = 14  # логи старше этого возраста удаляются при каждом запуске
+
+from pathlib import Path
+from datetime import datetime, timedelta
+import os
 PROJECT = Path(__file__).resolve().parent.parent
 
 LIBRARY_DIR = PROJECT / "nx_primitives"
@@ -12,10 +30,11 @@ LOG_DIR = PROJECT / "logs"
 SYSTEM_BASE = PROMPTS_DIR / "system_base.txt"
 OUTPUT_FILE = GENERATED_DIR / "result.py"
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL = "qwen2.5-coder:14b"
+# --- Gemini (Google AI Studio) ---
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+MODEL = "gemini-3.6-flash"
 
-LOG_MAX_AGE_DAYS = 14  # логи старше этого возраста удаляются при каждом запуске
+LOG_MAX_AGE_DAYS = 14
 
 RESULT_PREFIX = f"""import sys
 import os
