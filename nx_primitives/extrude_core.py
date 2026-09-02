@@ -1,7 +1,7 @@
 """Extrude + rect_profile (из original solid.py, полностью)."""
 from __future__ import annotations
 
-from math import sqrt, radians, cos, sin
+from math import sqrt, radians, cos, sin, tan
 
 import NXOpen
 import NXOpen.Features
@@ -276,25 +276,88 @@ class Extrude:
     def _compute_labels(self, profile, direction, height):
 
         unit_dir = _unit_vector(direction)
-
         bottom = profile.vertices
-
-        top = [
-            (
-                p[0] + unit_dir[0] * height,
-                p[1] + unit_dir[1] * height,
-                p[2] + unit_dir[2] * height
-            )
-            for p in bottom
-        ]
-
         n = len(bottom)
+
+        draft_dist = height * tan(radians(self.draft_angle)) if getattr(self, "draft_angle", 0.0) else 0.0
+
+        if draft_dist == 0.0 or n < 3:
+            top = [
+                (
+                    p[0] + unit_dir[0] * height,
+                    p[1] + unit_dir[1] * height,
+                    p[2] + unit_dir[2] * height
+                )
+                for p in bottom
+            ]
+        else:
+            # 2D-базис в плоскости профиля
+            u0 = _unit_vector(_subtract(bottom[1], bottom[0]))
+            v0 = _unit_vector(_cross(unit_dir, u0))
+            origin2d = bottom[0]
+
+            def to2d(p):
+                rel = _subtract(p, origin2d)
+                return (
+                    sum(a * b for a, b in zip(rel, u0)),
+                    sum(a * b for a, b in zip(rel, v0)),
+                )
+
+            pts2d = [to2d(p) for p in bottom]
+
+            # знак обхода - чтобы понять, куда "наружу"
+            area2 = sum(
+                pts2d[i][0] * pts2d[(i + 1) % n][1] - pts2d[(i + 1) % n][0] * pts2d[i][1]
+                for i in range(n)
+            )
+            ccw = area2 > 0
+
+            def edge_normal(i):
+                ax, ay = pts2d[i]
+                bx, by = pts2d[(i + 1) % n]
+                ex, ey = bx - ax, by - ay
+                elen = sqrt(ex * ex + ey * ey)
+                ex, ey = ex / elen, ey / elen
+                return (ey, -ex) if ccw else (-ey, ex)
+
+            def offset_line(i, dist):
+                ax, ay = pts2d[i]
+                nx, ny = edge_normal(i)
+                ox, oy = ax - nx * dist, ay - ny * dist
+                bx, by = pts2d[(i + 1) % n]
+                return (ox, oy, bx - ax, by - ay)
+
+            def line_intersect(l1, l2):
+                x1, y1, dx1, dy1 = l1
+                x2, y2, dx2, dy2 = l2
+                denom = dx1 * dy2 - dy1 * dx2
+                if abs(denom) < 1e-12:
+                    return (x1, y1)
+                t = ((x2 - x1) * dy2 - (y2 - y1) * dx2) / denom
+                return (x1 + dx1 * t, y1 + dy1 * t)
+
+            top2d = [
+                line_intersect(
+                    offset_line((i - 1) % n, draft_dist),
+                    offset_line(i, draft_dist),
+                )
+                for i in range(n)
+            ]
+
+            def to3d(pt2d):
+                x, y = pt2d
+                return (
+                    origin2d[0] + u0[0] * x + v0[0] * y + unit_dir[0] * height,
+                    origin2d[1] + u0[1] * x + v0[1] * y + unit_dir[1] * height,
+                    origin2d[2] + u0[2] * x + v0[2] * y + unit_dir[2] * height,
+                )
+
+            top = [to3d(p) for p in top2d]
 
         if n > len(_LABELS):
             raise ValueError("Слишком много вершин для буквенной разметки.")
 
         labels = {}
-
         for i in range(n):
             labels[_LABELS[i]] = bottom[i]
             labels[_LABELS[i] + "1"] = top[i]
