@@ -63,7 +63,8 @@ Fillet(workPart, plate, seam, radius=1.0)
 # Число attach() строго равно числу деталей из запроса — не больше, не меньше.
 base = Parallelogram(workPart, side_a=100.0, side_b=60.0, angle=90.0)
 plate = Extrude(workPart, [base], height=4.0)
-du = gap_offset(gap=10.0, size1=15.0)
+# gap/size1 берутся из ТЕКУЩЕГО запроса (не копировать числа примера)
+du = gap_offset(gap=<gap_из_запроса>, size1=<size_босса_из_запроса>)
 boss_l = plate.attach(
     lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
     thickness=5.0, frame=plate.center_frame(side='same', du=-du))
@@ -225,23 +226,26 @@ holes = [
 ]
 plate = Extrude(workPart, [base] + holes, height=4.0)
 
---- Пример: 4 одинаковых босса равномерным рядом на грани ---
+--- Пример: N одинаковых боссов равномерным рядом на грани (формула п.8) ---
 base = Parallelogram(workPart, side_a=150.0, side_b=60.0, angle=90.0)
 plate = Extrude(workPart, [base], height=6.0)
-# 4 босса 12x12 вдоль side_a=150, равные зазоры (края + между боссами):
-# gap=(150-4*12)/5=20.4, step=12+20.4=32.4, du1=-75+20.4+6=-48.6
+# gap/step/du_i пересчитываются от side_a, N и w ТЕКУЩЕГО запроса — не
+# копировать числа этого примера. Формула — addon_mapping п.8:
+#   gap = (side_a - N*w) / (N+1); step = w + gap
+#   du_i = -side_a/2 + gap + w/2 + (i-1)*step,  i = 1..N
+# Ниже — иллюстрация структуры для N=4, w=12 (числа пересчитать под запрос):
 boss_1 = plate.attach(
     lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
-    thickness=4.0, frame=plate.center_frame(side='same', du=-48.6))
+    thickness=4.0, frame=plate.center_frame(side='same', du=du_1))
 boss_2 = plate.attach(
     lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
-    thickness=4.0, frame=plate.center_frame(side='same', du=-16.2))
+    thickness=4.0, frame=plate.center_frame(side='same', du=du_2))
 boss_3 = plate.attach(
     lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
-    thickness=4.0, frame=plate.center_frame(side='same', du=16.2))
+    thickness=4.0, frame=plate.center_frame(side='same', du=du_3))
 boss_4 = plate.attach(
     lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
-    thickness=4.0, frame=plate.center_frame(side='same', du=48.6))
+    thickness=4.0, frame=plate.center_frame(side='same', du=du_4))
 
 --- Пример: треугольная пластина по двум сторонам и углу между ними ---
 base = Triangle.by_2_sides_and_angle(workPart, side_a=30.0, side_b=40.0, angle_ab=60.0, center=(0.0, 0.0))
@@ -351,3 +355,20 @@ Fillet(workPart, flange, seam, radius=2.0)
 base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
 # «литейный уклон 5°» -> draft_angle=5.0, явно указано в запросе
 plate = Extrude(workPart, [base], height=10.0, direction=(0.0, 0.0, 1.0), draft_angle=5.0)
+
+--- Пример: полукруглые торцы пластины (stadium) + фаска верхнего контура ---
+base = Parallelogram(workPart, side_a=100.0, side_b=30.0, angle=90.0)
+plate = Extrude(workPart, [base], height=6.0)
+# radius = side_b/2 = 15 -> короткие рёбра "bc"/"da" ПОЛНОСТЬЮ заменяются
+# дугами (полукруглые концы), не просто укорачиваются
+Fillet(workPart, plate, plate.vertical_edges(), radius=15.0)
+# После такого Fillet top_edges()/"bc"/"da" по именам больше НЕ РЕЗОЛВЯТСЯ -
+# find_edge упадёт с ValueError (вершины физически исчезли). ОБЯЗАТЕЛЬНО
+# бери рёбра верхней грани геометрически через edges_in_box, с небольшим
+# запасом по границам (исходные side_a/2=50, side_b/2=15, height=6):
+top_contour_edges = edges_in_box(
+    plate.body,
+    p_min=(-51.0, -16.0, 5.9),
+    p_max=(51.0, 16.0, 6.1),
+)
+Chamfer(workPart, plate, top_contour_edges, setback=1.0)

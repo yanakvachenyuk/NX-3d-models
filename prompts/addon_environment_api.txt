@@ -59,12 +59,8 @@ Frame(origin, u, v, normal=None)
     .point(u=0.0, v=0.0, w=0.0)
     .points(local_xy)
     .flipped() -> Frame
-        Новый Frame с той же origin/u/v, но normal развёрнута на 180°.
-        Используй, когда деталь должна расти НАВСТРЕЧУ обычному
-        направлению нормали frame (anchor angle=0 "вверх от грани",
-        center_frame "внутрь оболочки/полости" и т.п.) — см. п.1a, 1b.
-        ЕДИНСТВЕННЫЙ способ развернуть направление роста; direction=
-        у attach() вручную НЕ указывается.
+        Разворот normal на 180° (origin/u/v те же). См. addon_mapping
+        п.1a, 1b. direction= у attach() вручную не указывается.
 
 --- Extrude: стыковка ---
 Extrude.find_edge(name, profile_index=0)
@@ -218,29 +214,6 @@ gap_offset(gap, size1, size2=None) -> float
    origin, куда растёт, какой u0/v0/angle и почему.
 7. Самопроверка перед выдачей — см. блок МИНИМАЛЬНОСТЬ в system_base
    и addon_checklist целиком.
-
-================================================================================
-ПРИСТРОЙ К ГРАНИ/РЕБРУ — ЕДИНСТВЕННЫЙ ПАТТЕРН
-================================================================================
-# ПРАВИЛЬНО:
-frame = big_box.anchor("abb1a1", offset=10.0, angle=-90.0)
-small_box = big_box.attach(
-    lambda f: rect_profile(workPart, f, length=8.0, width=12.0, u0=0.0, v0=0.0),
-    thickness=5.0, frame=frame,
-)
-# НЕПРАВИЛЬНО:
-small_base = Parallelogram(...)
-small_box = small_base.Extrude(...)  # AttributeError — метода нет
-
-================================================================================
-СВОБОДНЫЕ / ДАЛЬНИЕ вертикальные рёбра пристроя (attach от ребра, v0=0)
-================================================================================
-  → ТОЛЬКО ["cc1", "dd1"] — НЕ vertical_edges() (там есть aa1,bb1 на шве)
-    и НЕ ["aa1", "bb1"] (это как раз рёбра стыка)
-  contact/на шве: aa1, bb1 (+ часто ab, a1b1) = contact_edges()
-  Пример:      Fillet(workPart, small_box, ["cc1", "dd1"], radius=1.5)
-  Антипример:  Fillet(workPart, small_box, small_box.vertical_edges(), ...)  # скруглит и шов
-               Fillet(workPart, small_box, ["aa1", "bb1"], ...)  # только шов
 
 ================================================================================
 КОГДА НУЖНО РУЧНОЕ УПРАВЛЕНИЕ (редко)

@@ -68,14 +68,8 @@ Fillet нет; «скруглить» без «объединить» → Fillet
   3) parent.attach_plate(...)
 
 Triangle(workPart, side_a, side_b, side_c) # НЕПРАВИЛЬНО — __init__
-  принимает ТРИ ТОЧКИ (p1, p2, p3), а не длины сторон! Треугольник
-  по сторонам/углам строится ТОЛЬКО через фабричные методы:
-    Triangle.by_3_sides(workPart, side_a, side_b, side_c, center=(0,0), frame=None)
-    Triangle.by_2_sides_and_angle(workPart, side_a, side_b, angle_ab, ...)
-    Triangle.by_2_angles_and_side(workPart, angle_a, angle_b, side_ab, ...)
-  В отличие от Parallelogram/Circle (их можно звать напрямую с
-  числовыми параметрами), Triangle НАПРЯМУЮ через __init__ не
-  вызывается никогда.
+  принимает три точки, а не длины сторон. Треугольник по сторонам/
+  углам — ТОЛЬКО через фабричные методы, см. п.9c.
 
 ======================================================================
 ГЛАВНАЯ РАЗВИЛКА (решай в первую очередь для каждого нового тела)

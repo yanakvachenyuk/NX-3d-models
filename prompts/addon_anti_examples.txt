@@ -38,11 +38,6 @@ seam = attachment_seam(small_box, merged.body)
 names = list(dict.fromkeys(small_box.contact_edges() + small_box.vertical_edges()))
 small_edges = small_box.edges_on(merged.body, names)
 
-# Плохо: v0=0.5 при anchor:
-rect_profile(..., u0=0.0, v0=0.5)
-# Хорошо при anchor:
-rect_profile(..., u0=0.0, v0=0.0)
-
 # Плохо после attach_plate — new_edges / ручной contact_edges / attachment_seam:
 Fillet(workPart, plate, merged.new_edges, radius=1.0)
 names = list(dict.fromkeys(wall.contact_edges()))
@@ -60,11 +55,6 @@ Fillet(workPart, plate, edges, radius=5.0)
 plate.attach_plate("ab", length=None, width=4.0, thickness=15.0)
 # Хорошо — высота 15, толщина 4:
 plate.attach_plate("ab", length=None, width=15.0, thickness=4.0)
-
-# Плохо (отверстие) — ручной счёт u/v, легко перепутать/забыть +radius:
-lambda f: Circle.on_frame(workPart, 2.0, f, u=4.0, v=3.0)
-# Хорошо — center_hole() считает сама, length совпадает с rect_profile:
-holes=[center_hole(workPart, radius=2.0, length=10.0, distance_from_seam=3.0)]
 
 # Плохо — метода Extrude() у профиля нет:
 small_base = Parallelogram(workPart, side_a=10, side_b=8, angle=90)
@@ -271,19 +261,4 @@ x_positions = [-40.0, 0.0, 40.0]  # N_side=3
 holes = [Circle(..., center=base.point_from_center(x, dy)) for x in x_positions]
 holes += [Circle(..., center=base.point_from_center(x, -dy)) for x in x_positions]
 
-# Плохо — direction= указан вручную вместо angle/flipped():
-frame = box.anchor("bc", offset=6.0, angle=-90.0)
-outward = tuple(-c for c in frame.normal)
-extension = box.attach(
-    lambda f: rect_profile(workPart, f, length=6.0, width=25.0, u0=0.0, v0=0.0),
-    thickness=25.0, frame=frame, direction=outward,
-)
-# Хорошо — angle сам определяет направление, direction не указываем:
-frame = box.anchor("bc", offset=6.0, angle=-90.0)
-extension = box.attach(
-    lambda f: rect_profile(workPart, f, length=6.0, width=25.0, u0=0.0, v0=0.0),
-    thickness=25.0, frame=frame,
-)
-# Правило: направление меняется ТОЛЬКО через angle= у anchor()/
-# center_frame(), либо frame.flipped() для разворота навстречу
-# нормали (см. п.1a, 1b). direction= у attach() руками — никогда.
+# direction= у attach() руками — никогда, см. addon_mapping п.1a.

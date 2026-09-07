@@ -223,6 +223,19 @@ class new_ui:
                         with open(RESULT_PATH, "r", encoding="utf-8") as f:
                             code = f.read()
 
+                        # Холст должен быть пуст перед КАЖДЫМ exec: перед первой
+                        # попыткой — это могла быть старая модель с прошлого нажатия
+                        # button0; перед retry — частично построенные тела из
+                        # предыдущей упавшей попытки этого же цикла. continuation-
+                        # промпт (_continuation_prompt) уже рассчитан на пустой холст
+                        # и полную пересборку геометрии из chat_history, так что
+                        # очистка тут ничего не ломает даже при same_chat=True.
+                        try:
+                            self.clear_canvas()
+                        except Exception as ex:
+                            self.show_in_listing(f"Ошибка очистки холста перед построением:\n{str(ex)}")
+                            return 0
+
                         try:
                             exec(code, {})
                             # Успех — запоминаем этот турн ВСЕГДА, независимо от

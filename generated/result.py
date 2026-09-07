@@ -37,14 +37,19 @@ from nx_primitives import (
 
 theSession = NXOpen.Session.GetSession()
 workPart = theSession.Parts.Work
-flange_base = Circle(workPart, radius=30.0, center=(0.0, 0.0))
-flange = Extrude(workPart, [flange_base] + holes_in_circle(workPart, flange_base, radii=3.0, circle_radius=24.0, n=4), height=5.0)
-shaft = flange.attach(
-    lambda f: Circle.on_frame(workPart, 15.0, f, u=0.0, v=0.0),
-    thickness=25.0,
-    frame=flange.center_frame(side='same'),
-    holes=[lambda f: Circle.on_frame(workPart, 8.0, f, u=0.0, v=0.0)],  # сквозное отверстие R8 по оси
-)
-merged = Union(workPart, flange, shaft)
-seam = attachment_seam(shaft, merged.body)
-Fillet(workPart, flange, seam, radius=2.0)
+base = Parallelogram(workPart, side_a=150.0, side_b=100.0, angle=90.0)
+plate = Extrude(workPart, [base], height=6.0)
+# gap = 10 мм, side_a = 150, N=4, w=15 → gap = (150 - 4*15)/5 = 12
+# step = w + gap = 27; du_i = -75 + 12 + 7.5 + (i-1)*27
+boss_1 = plate.attach(
+    lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
+    thickness=5.0, frame=plate.center_frame(side='same', du=-57.5))
+boss_2 = plate.attach(
+    lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
+    thickness=5.0, frame=plate.center_frame(side='same', du=-30.5))
+boss_3 = plate.attach(
+    lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
+    thickness=5.0, frame=plate.center_frame(side='same', du=26.5))
+boss_4 = plate.attach(
+    lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
+    thickness=5.0, frame=plate.center_frame(side='same', du=53.5))
