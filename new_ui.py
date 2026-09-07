@@ -22,7 +22,8 @@ from pathlib import Path
 
 # --- НАСТРОЙКИ ПОД КОНКРЕТНУЮ МАШИНУ (проверить при переносе проекта) ------
 PROJECT_ROOT = str(Path(__file__).resolve().parent)
-PYTHON_EXE = r"C:\Users\user\AppData\Local\Programs\Python\Python313\python.exe"
+PYTHON_EXE = r"C:\Users\user\AppData\Local\Microsoft\WindowsApps\python.exe"
+# PYTHON_EXE = r"C:\Users\user\AppData\Local\Programs\Python\Python313\python.exe"
 GENERATE_SCRIPT = PROJECT_ROOT + r"\generate.py"
 RESULT_PATH = PROJECT_ROOT + r"\generated\result.py"
 # Единый файл контекста для generate.py: может содержать error/code (ретрай
@@ -164,6 +165,7 @@ class new_ui:
                 # "Очистить все" — сносим всю геометрию с холста
                 try:
                     self.clear_canvas()
+                    self.chat_history = []
                     self.multiline_string0.SetValue([""])
                 except Exception as ex:
                     self.show_in_listing(f"Ошибка очистки:\n{str(ex)}")
@@ -177,7 +179,8 @@ class new_ui:
                         return 0
 
                     same_chat = bool(self.toggle0.Value)
-
+                    if same_chat:
+                        self.clear_canvas()
                     prev_error_text = None   # ошибка исполнения с предыдущей итерации
                     prev_code_text = None    # код, который реально исполнялся и упал
 
