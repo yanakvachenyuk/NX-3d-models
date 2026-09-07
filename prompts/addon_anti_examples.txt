@@ -1,19 +1,6 @@
 ======================================================================
 ТИПИЧНЫЕ АНТИ-ПРИМЕРЫ (так делать НЕЛЬЗЯ)
 ======================================================================
-# Плохо: attach_plate не подходит для стенки с отступом (не на всю
-# длину), и ручной direction несовместим с реальными осями frame:
-frame = plate.anchor("ab", offset=5.0, angle=-90.0)
-wall = plate.attach(
-    lambda f: rect_profile(workPart, f, length=15.0, width=10.0, u0=0.0, v0=0.0),
-    thickness=3.0, frame=frame, direction=(-1.0, 0.0, 0.0),
-)
-# Хорошо: angle=0.0 (растёт вдоль нормали пластины), direction не указываем:
-frame = plate.anchor("ab", offset=5.0, angle=0.0)
-wall = plate.attach(
-    lambda f: rect_profile(workPart, f, length=15.0, width=10.0, u0=0.0, v0=0.0),
-    thickness=3.0, frame=frame,
-)
 
 # Плохо — center_hole для стенки:
 holes=[lambda f: center_hole(workPart, radius=3.0, length=90.0, distance_from_seam=7.5)]
@@ -166,25 +153,9 @@ frame = box.anchor("bc", offset=6.0, angle=0.0)
 # Хорошо — выступ от ребра → angle=-90:
 frame = box.anchor("bc", offset=6.0, angle=-90.0)
 
-# Плохо: angle=-90.0 уже растит деталь корректно вбок от ребра, но
-# явный direction=tuple(-c for c in frame.normal) ГАСИТ это направление
-# и разворачивает рост обратно (паттерн из "Пример 3" скопирован не туда -
-# там angle=0.0, а не -90.0):
-frame = box.anchor("bc", offset=6.0, angle=-90.0)
-outward = tuple(-c for c in frame.normal)
-extension = box.attach(
-    lambda f: rect_profile(workPart, f, length=6.0, width=25.0, u0=0.0, v0=0.0),
-    thickness=25.0, frame=frame, direction=outward,
-)
-# Хорошо: angle=-90.0 сам по себе достаточен, direction= не указываем:
-frame = box.anchor("bc", offset=6.0, angle=-90.0)
-extension = box.attach(
-    lambda f: rect_profile(workPart, f, length=6.0, width=25.0, u0=0.0, v0=0.0),
-    thickness=25.0, frame=frame,
-)
-
-# ВАЖНО: Пример 3 из addon_examples — ЕДИНСТВЕННЫЙ случай, когда direction=
-# допустим (там angle=0.0). При angle=-90.0 direction= ЗАПРЕЩЁН всегда.
+# ВАЖНО: direction= у attach() вручную НЕ указывается НИКОГДА. Разворот
+# роста навстречу нормали frame — только через frame.flipped() (Пример 3,
+# п.1a, п.1b). При angle=-90.0 (обычный выступ вбок) .flipped() не нужен.
 
 # Плохо — «свободные вертикали» через vertical_edges() (там есть шов aa1/bb1):
 Fillet(workPart, ext, ext.vertical_edges(), radius=1.0)
@@ -236,6 +207,15 @@ Chamfer(workPart, box, ["aa1", "bb1"], radius=1.0)
 # Хорошо:
 Chamfer(workPart, box, ["aa1", "bb1"], setback=1.0)
 
+# Плохо — фаска на кромке ОТВЕРСТИЯ без profile_index уходит на
+# внешний контур пластины (profile_index=0 по умолчанию):
+base = Circle(workPart, radius=45.0, center=(0.0, 0.0))
+central_hole = Circle(workPart, radius=20.0, center=(0.0, 0.0))
+cover = Extrude(workPart, [base, central_hole], height=6.0)
+Chamfer(workPart, cover, [cover.circular_edge(ring='bottom')], setback=1.0)
+# Хорошо — profile_index=1 указывает именно на central_hole:
+Chamfer(workPart, cover, [cover.circular_edge(profile_index=1, ring='top')], setback=1.0)
+
 # Плохо — Shell с телом вместо граней:
 Shell(workPart, box, faces=[box.body], thickness=2.0)
 # Хорошо — грань через top_face()/bottom_face()/side_face():
@@ -255,3 +235,55 @@ bosses = [
                  thickness=4.0, frame=fr)
     for fr in frames
 ]
+
+# Плохо — отверстия по болтовому кругу вручную через math.cos/sin:
+import math
+bolt_holes = [Circle(workPart, radius=4.0,
+    center=(35.0*math.cos(i*2*math.pi/6), 35.0*math.sin(i*2*math.pi/6)))
+    for i in range(6)]
+# Хорошо — holes_in_circle делает это сама, координаты через point_from_center:
+bolt_holes = holes_in_circle(workPart, base, radii=4.0, circle_radius=35.0, n=6)
+
+# Плохо — прилив внутри корпуса-оболочки без flipped():
+# растёт наружу (вверх), становится внешним бугорком на крышке
+boss = box.attach(
+    lambda f: rect_profile(workPart, f, length=8.0, width=8.0, u0=0.5, v0=0.5),
+    thickness=15.0, frame=box.center_frame(side='same', du=-dx, dv=dy),
+)
+
+# Плохо — отверстие вылезает за границу пластины: x=side_a/2 без
+# вычета радиуса, часть окружности лежит вне внешнего контура:
+Circle(workPart, radius=r, center=base.point_from_center(side_a/2, y))
+# Хорошо — проверка |x|+radius <= side_a/2 перед подстановкой:
+x = side_a/2 - d  # d учитывает и отступ, и радиус, если нужно впритык
+Circle(workPart, radius=r, center=base.point_from_center(x, y))
+
+# Плохо — «шесть отверстий, по три с каждой стороны»: N_side взят
+# как ОБЩЕЕ число (6) и применён К КАЖДОЙ стороне → 12 отверстий
+# вместо 6 (использована формула ряда из 6 точек, продублированная
+# на обе стороны):
+x_positions = [-60.0, -40.0, -20.0, 20.0, 40.0, 60.0]  # N=6 на сторону!
+holes = [Circle(..., center=base.point_from_center(x, dy)) for x in x_positions]
+holes += [Circle(..., center=base.point_from_center(x, -dy)) for x in x_positions]
+# Хорошо — N_side = 3 (явно «по три с каждой стороны»), список x_i
+# из 3 точек, применён к обеим сторонам → итого 3+3=6:
+x_positions = [-40.0, 0.0, 40.0]  # N_side=3
+holes = [Circle(..., center=base.point_from_center(x, dy)) for x in x_positions]
+holes += [Circle(..., center=base.point_from_center(x, -dy)) for x in x_positions]
+
+# Плохо — direction= указан вручную вместо angle/flipped():
+frame = box.anchor("bc", offset=6.0, angle=-90.0)
+outward = tuple(-c for c in frame.normal)
+extension = box.attach(
+    lambda f: rect_profile(workPart, f, length=6.0, width=25.0, u0=0.0, v0=0.0),
+    thickness=25.0, frame=frame, direction=outward,
+)
+# Хорошо — angle сам определяет направление, direction не указываем:
+frame = box.anchor("bc", offset=6.0, angle=-90.0)
+extension = box.attach(
+    lambda f: rect_profile(workPart, f, length=6.0, width=25.0, u0=0.0, v0=0.0),
+    thickness=25.0, frame=frame,
+)
+# Правило: направление меняется ТОЛЬКО через angle= у anchor()/
+# center_frame(), либо frame.flipped() для разворота навстречу
+# нормали (см. п.1a, 1b). direction= у attach() руками — никогда.

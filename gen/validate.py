@@ -300,21 +300,47 @@ _FILLET_RE = re.compile(r"скругл|fillet|фаск|сглад|радиус\w
 _BOOL_RE = re.compile(r"объедин|единое\s+тело|слить|склеить|вычесть|пересеч", re.I)
 _HOLE_RE = re.compile(r"отверст|дыр|паз|hole|прорез|просверл", re.I)
 
-def _check_minimality(code: str, user_request: str) -> str | None:
+def _check_minimality(code: str, user_request: str, tree: ast.AST | None = None) -> str | None:
+    if tree is None:
+        tree = ast.parse(code)
+
+    called_funcs = {
+        node.func.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+
     req = user_request
     errs = []
-    if "Fillet(" in code and not _FILLET_RE.search(req):
+
+    fillet_used = "Fillet" in called_funcs
+    bool_used = bool(called_funcs & {"Union", "Subtract", "Intersect"})
+    holes_used = any(
+        isinstance(kw.value, (ast.List, ast.Call, ast.Name))
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        for kw in node.keywords
+        if kw.arg == "holes"
+    )
+
+    if fillet_used and not _FILLET_RE.search(req):
         errs.append(
             "В коде есть Fillet(...), в запросе нет слов про скругление — удали Fillet целиком."
         )
-    if any(s in code for s in ("Union(", "Subtract(", "Intersect(")) and not _BOOL_RE.search(req):
+
+    seam_words_between_bodies = re.search(
+        r"(переход|шов|стык|соединени\w*)\s+между", req, re.I
+    )
+    if bool_used and not _BOOL_RE.search(req) and not seam_words_between_bodies:
         errs.append(
             "В коде есть Union/Subtract/Intersect, в запросе нет объединения — удали."
         )
-    if "holes=" in code and not _HOLE_RE.search(req):
+
+    if holes_used and not _HOLE_RE.search(req):
         errs.append(
             "В коде есть holes=, в запросе нет отверстия — удали holes=."
         )
+
     return " ".join(errs) if errs else None
 
 def _double_extrude_plate_holes(code: str) -> str | None:
@@ -331,17 +357,31 @@ def _double_extrude_plate_holes(code: str) -> str | None:
 
 
 def check_minimality_warnings(code: str, user_request: str) -> list[str]:
+    tree = ast.parse(code)
+    called_funcs = {
+        node.func.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    holes_used = any(
+        kw.arg == "holes"
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        for kw in node.keywords
+    )
+
     warnings: list[str] = []
-    if "Fillet(" in code and not _FILLET_TRIGGER_PATTERN.search(user_request):
+    if "Fillet" in called_funcs and not _FILLET_TRIGGER_PATTERN.search(user_request):
         warnings.append(
             "В коде есть Fillet(...), но в запросе нет слов про скругление. Убери Fillet."
         )
-    if any(f"{name}(" in code for name in ("Union", "Subtract", "Intersect")) and \
-            not _contains_any(user_request, _BOOLEAN_TRIGGER_WORDS):
+    if (called_funcs & {"Union", "Subtract", "Intersect"}) and \
+            not _contains_any(user_request, _BOOLEAN_TRIGGER_WORDS) and \
+            not re.search(r"(переход|шов|стык|соединени\w*)\s+между", user_request, re.I):
         warnings.append(
             "В коде есть Union/Subtract/Intersect, но в запросе нет объединения. Убери."
         )
-    if "holes=" in code and not _contains_any(user_request, _HOLE_TRIGGER_WORDS):
+    if holes_used and not _contains_any(user_request, _HOLE_TRIGGER_WORDS):
         warnings.append(
             "В коде есть holes=[...], но в запросе нет отверстия. Убери holes=."
         )
@@ -410,7 +450,7 @@ def validate_code(code: str, user_request: str = "") -> str | None:
                 "Сначала shelf = wall.attach(...), потом Union."
             )
 
-    mini = _check_minimality(code, user_request)
+    mini = _check_minimality(code, user_request, tree)
     if mini:
         return mini
 

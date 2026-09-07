@@ -57,30 +57,12 @@ merged = Union(workPart, plate, boss)
 seam = attachment_seam(boss, merged.body)
 Fillet(workPart, plate, seam, radius=1.0)
 
---- Пример 2c: три босса на верхней грани со смещением и отверстиями ---
-base = Parallelogram(workPart, side_a=100.0, side_b=60.0, angle=90.0)
-plate = Extrude(workPart, [base], height=5.0, direction=(0.0, 0.0, 1.0))
-boss_c = plate.attach(
-    lambda f: rect_profile(workPart, f, length=20.0, width=20.0, u0=0.5, v0=0.5),
-    thickness=6.0, frame=plate.center_frame(side='same'),
-    holes=[lambda f: Circle.on_frame(workPart, 4.0, f, u=0.0, v=0.0)],
-)
-boss_l = plate.attach(
-    lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
-    thickness=4.0, frame=plate.center_frame(side='same', du=-30.0),
-    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)],
-)
-boss_r = plate.attach(
-    lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
-    thickness=4.0, frame=plate.center_frame(side='same', du=30.0),
-    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)],
-)
-
---- Пример 2d: ДВЕ бобышки на грани с зазором (gap_offset) ---
+--- Пример 2c: две бобышки на грани с зазором (gap_offset) ---
+# Общий принцип: любое число боссов на одной грани = столько же
+# attach() к одной пластине, каждый со своим center_frame(du=..., dv=...).
+# Число attach() строго равно числу деталей из запроса — не больше, не меньше.
 base = Parallelogram(workPart, side_a=100.0, side_b=60.0, angle=90.0)
 plate = Extrude(workPart, [base], height=4.0)
-# зазор 10 мм между боссами 15x15 - gap_offset сама считает du из
-# ПОЛНЫХ размеров боссов, не нужно делить на 2 вручную
 du = gap_offset(gap=10.0, size1=15.0)
 boss_l = plate.attach(
     lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
@@ -89,37 +71,15 @@ boss_r = plate.attach(
     lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
     thickness=5.0, frame=plate.center_frame(side='same', du=du))
 
---- Пример 2e: три бобышки с РАЗНЫМИ радиусами отверстий (по одному на бобышку) ---
-base = Parallelogram(workPart, side_a=120.0, side_b=80.0, angle=90.0)
-plate = Extrude(workPart, [base], height=5.0)
-# центральная бобышка, R3 — первое значение из списка "R3, R2, R2"
-boss_center = plate.attach(
-    lambda f: rect_profile(workPart, f, length=20.0, width=20.0, u0=0.5, v0=0.5),
-    thickness=6.0, frame=plate.center_frame(side='same'),
-    holes=[lambda f: Circle.on_frame(workPart, 3.0, f, u=0.0, v=0.0)],
-)
-# левая бобышка, R2 — второе значение из списка
-boss_left = plate.attach(
-    lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
-    thickness=4.0, frame=plate.center_frame(side='same', du=-25.0),
-    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)],
-)
-# правая бобышка, R2 — третье значение из списка
-boss_right = plate.attach(
-    lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
-    thickness=4.0, frame=plate.center_frame(side='same', du=25.0),
-    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)],
-)
-
 --- Пример 3: ТОЛЬКО если в запросе явно «вверх от грани» / «торчать вверх» ---
-# ЕДИНСТВЕННЫЙ легитимный случай direction=. При angle=-90 direction= НЕ писать.
+# .flipped() разворачивает нормаль frame на 180° (origin/u/v те же).
+# При angle=-90 (обычный выступ вбок) flipped() НЕ применяется.
 base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)
 box = Extrude(workPart, [base], height=15.0, direction=(0.0, 0.0, 1.0))
-frame = box.anchor("ab", offset=8.0, angle=0.0)
-outward = tuple(-c for c in frame.normal)
+frame = box.anchor("ab", offset=8.0, angle=0.0).flipped()
 tab = box.attach(
     lambda f: rect_profile(workPart, f, length=8.0, width=10.0, u0=0.0, v0=0.0),
-    thickness=7.0, frame=frame, direction=outward,
+    thickness=7.0, frame=frame,
 )
 
 --- Пример 4: второй параллелепипед рядом (angle=-90), произвольный Polygon ---
@@ -374,6 +334,18 @@ tab = cyl.attach(
     lambda f: rect_profile(workPart, f, length=10.0, width=8.0, u0=0.5, v0=0.0),
     thickness=6.0, frame=frame,
 )
+
+--- Пример: цилиндр на торце фланца (родитель — Circle-профиль, center_frame) ---
+flange_base = Circle(workPart, radius=30.0, center=(0.0, 0.0))
+flange = Extrude(workPart, [flange_base], height=5.0, direction=(0.0, 0.0, 1.0))
+shaft = flange.attach(
+    lambda f: Circle.on_frame(workPart, 15.0, f, u=0.0, v=0.0),
+    thickness=25.0,
+    frame=flange.center_frame(side='same'),
+)
+merged = Union(workPart, flange, shaft)
+seam = attachment_seam(shaft, merged.body)
+Fillet(workPart, flange, seam, radius=2.0)
 
 --- Пример: пластина с уклоном стенок (draft_angle) ---
 base = Parallelogram(workPart, side_a=60.0, side_b=40.0, angle=90.0)

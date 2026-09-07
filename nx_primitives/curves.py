@@ -258,6 +258,16 @@ class Circle(Profile):
 
         super().__init__([curve])
 
+    def point_from_center(self, dx: float = 0.0, dy: float = 0.0):
+        """
+        Точка со смещением (dx, dy) ОТ ЦЕНТРА этой окружности (self.center).
+        Та же семантика, что у ClosedProfile.point_from_center — нужна,
+        чтобы holes_in_circle/holes_in_row могли принимать Circle как base
+        (например, внешний контур круглого фланца).
+        """
+        cx, cy = self.center[0], self.center[1]
+        return (cx + dx, cy + dy, self.center[2] if len(self.center) > 2 else 0.0)
+
     @classmethod
     def on_frame(cls, workPart, radius, frame, u=0.0, v=0.0):
         return cls(workPart, radius, center=frame.point(u, v), normal=frame.normal)

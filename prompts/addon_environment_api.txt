@@ -7,7 +7,7 @@ Session, workPart и все публичные имена из nx_primitives у�
   Extrude, Fillet, Chamfer, Shell, Union, Subtract, Intersect, Boolean,
   Frame, Hide, rect_profile, center_hole,
   attachment_seam, edges_after_boolean, edges_in_box, edges_near,
-  attach_plate_seam, gap_offset, holes_in_row
+  attach_plate_seam, gap_offset, holes_in_row, holes_in_circle
 НЕ пиши:
   import NXOpen
   from nx_primitives import ...
@@ -58,6 +58,13 @@ Polygon.on_frame(workPart, frame, local_vertices)
 Frame(origin, u, v, normal=None)
     .point(u=0.0, v=0.0, w=0.0)
     .points(local_xy)
+    .flipped() -> Frame
+        Новый Frame с той же origin/u/v, но normal развёрнута на 180°.
+        Используй, когда деталь должна расти НАВСТРЕЧУ обычному
+        направлению нормали frame (anchor angle=0 "вверх от грани",
+        center_frame "внутрь оболочки/полости" и т.п.) — см. п.1a, 1b.
+        ЕДИНСТВЕННЫЙ способ развернуть направление роста; direction=
+        у attach() вручную НЕ указывается.
 
 --- Extrude: стыковка ---
 Extrude.find_edge(name, profile_index=0)
@@ -172,6 +179,24 @@ holes_in_row(workPart, profile, radii, gap, y=0.0, n=None,
     сдвигает раскладку ВНУТРИ ряда от короткого края. y сдвигает ВЕСЬ
     РЯД целиком поперёк. Разбор формулировок запроса (align vs y) —
     addon_mapping п.9, код-примеры — addon_anti_examples.
+holes_in_circle(workPart, profile, radii, circle_radius: float,
+                    n: int = None, start_angle: float = 0.0,
+                    center=(0.0, 0.0))
+    Готовые Circle для N отверстий, равномерно расположенных по окружности
+        (болтовой круг) радиуса circle_radius, вокруг center (смещение от
+        центра profile - как в holes_in_row).
+
+        radii:
+            - список чисел (длина списка = число отверстий), ЛИБО
+            - одно число - тогда ОБЯЗАТЕЛЕН n= (сколько отверстий создать),
+            все N отверстий получат этот радиус.
+
+        start_angle - угол ПЕРВОГО отверстия, в градусах, от оси X профиля
+                    (0 = вправо от center), далее отверстия идут против
+                    часовой стрелки с равным шагом 360/n.
+
+        Возвращает список ГОТОВЫХ Circle - используй как и holes_in_row:
+            Extrude(workPart, [base] + holes_in_circle(workPart, base, radii=3.0, circle_radius=40.0, n=6), ...)
 Hide(theSession, *profiles)
 gap_offset(gap, size1, size2=None) -> float
     du для ДВУХ объектов, симметрично расположенных с зазором gap

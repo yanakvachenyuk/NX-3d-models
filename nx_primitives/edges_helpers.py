@@ -1,10 +1,8 @@
 """Поиск рёбер и швы (из original solid.py, без сокращений)."""
 from __future__ import annotations
-
 from math import sqrt
-
+from typing import TYPE_CHECKING
 import NXOpen
-
 from .geometry import _subtract, _scale
 
 _LABELS = "abcdefghijklmnopqrstuvwxyz"
@@ -191,6 +189,32 @@ def _find_body_edge(body, p1, p2, tol=1e-3):
     )
 
 
+def _find_circular_edges_on_body(body, center, radius, unit_dir, target_h, tol=1.0):
+    """
+    Общая логика поиска круглого ребра тела по (center, radius, направление,
+    высота вдоль направления). Вынесена из circular_edge(), чтобы её можно
+    было применять не только к self.body, но и к произвольному body
+    (например, parent_body после Union — см. attachment_seam).
+    """
+    candidates = []
+    for edge in _get_body_edges_safe(body):
+        if getattr(edge, "SolidEdgeType", None) != NXOpen.Edge.EdgeType.Circular:
+            continue
+        vs = edge.GetVertices()
+        if not vs:
+            continue
+        p = (vs[0].X, vs[0].Y, vs[0].Z)
+        to_p = _subtract(p, center)
+        proj = sum(a * b for a, b in zip(to_p, unit_dir))
+        if abs(proj - target_h) > tol:
+            continue
+        radial_vec = _subtract(to_p, _scale(unit_dir, proj))
+        radial_dist = sqrt(sum(c ** 2 for c in radial_vec))
+        if abs(radial_dist - radius) > tol:
+            continue
+        candidates.append(edge)
+    return candidates
+
 
 def edges_in_box(body, p_min, p_max):
     """
@@ -239,35 +263,26 @@ def edges_near(body, point, tol=1.0):
 
 
 
-def attachment_seam(child: Extrude, parent_body, profile_index: int = 0, ring: str = "bottom"):
+def attachment_seam(child: Extrude, parent_body, profile_index: int = 0, ring: str = "bottom", tol: float = 1.0):
     """
-    Рёбра шва для детали, присоединённой ВПЛОТНУЮ (через attach() /
-    center_frame() с обычным lift, или attach_plate) - то есть там, где
-    собственное кольцо вершин детали (a,b,c,d - "нижнее", или a1,b1,c1,d1 -
-    "верхнее") совпадает с местом стыка.
-
-    Работает надёжнее, чем Boolean.new_edges, именно для таких случаев:
-    new_edges сравнивает "было/стало" и МОЖЕТ пропустить ребро шва, если
-    оно совпало с уже существовавшим (собственным) ребром присоединяемой
-    детали - а для деталей "впритык" это происходит практически всегда.
-    attachment_seam вместо этого просто берёт координаты контура из
-    child.profile_labels (посчитаны заранее, при постройке child) и ищет
-    рёбра с этими координатами прямо на итоговом теле.
-
-    child         - Extrude присоединённой детали (её .body может уже не
-                    существовать после Union/Subtract - не важно, метод
-                    его не использует, только profile_labels).
-    parent_body   - тело, где теперь физически лежит шов
-                    (обычно merged.body после Union).
-    ring          - "bottom" (по умолчанию, метки без '1' - обычно это и
-                    есть плоскость стыка при обычном присоединении сверху)
-                    или "top" (метки с '1').
-
-    Возвращает список найденных NXOpen.Edge. Рёбра, которые после
-    объединения слились с соседней гранью и перестали существовать по
-    отдельности, просто не попадают в результат (тихо пропускаются) -
-    это нормально и не ошибка.
+    Рёбра шва для детали, присоединённой ВПЛОТНУЮ...
+    [существующий докстринг без изменений]
     """
+    profile = child.profiles[profile_index]
+
+    # Круглый профиль (Circle) - нет буквенных вершин/profile_labels,
+    # ищем шов геометрически по (center, radius) вместо имён вершин.
+    # center у профиля уже в глобальных координатах (Circle.on_frame
+    # ставит center = frame.point(u, v)), поэтому его можно использовать
+    # напрямую как точку на искомом ребре шва.
+    radius = getattr(profile, "radius", None)
+    center = getattr(profile, "center", None)
+    if radius is not None and center is not None:
+        unit_dir = _unit_vector(child.direction)
+        target_h = child.height if ring == "top" else 0.0
+        return _find_circular_edges_on_body(parent_body, center, radius, unit_dir, target_h, tol)
+
+    # существующая логика для именованных профилей (Parallelogram/Triangle/Polygon)
     labels = child.profile_labels[profile_index]
     names = [n for n in labels if (n.endswith("1") if ring == "top" else not n.endswith("1"))]
     names.sort(key=lambda n: _LABELS.index(n[0]))

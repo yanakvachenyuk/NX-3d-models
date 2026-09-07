@@ -37,7 +37,14 @@ from nx_primitives import (
 
 theSession = NXOpen.Session.GetSession()
 workPart = theSession.Parts.Work
-base = Parallelogram(workPart, side_a=50.0, side_b=50.0, angle=90.0)
-# явно указан уклон стенок 3° -> draft_angle=3.0
-box = Extrude(workPart, [base], height=30.0, direction=(0.0, 0.0, 1.0), draft_angle=3.0)
-Fillet(workPart, box, box.top_edges(), radius=2.0)
+flange_base = Circle(workPart, radius=30.0, center=(0.0, 0.0))
+flange = Extrude(workPart, [flange_base] + holes_in_circle(workPart, flange_base, radii=3.0, circle_radius=24.0, n=4), height=5.0)
+shaft = flange.attach(
+    lambda f: Circle.on_frame(workPart, 15.0, f, u=0.0, v=0.0),
+    thickness=25.0,
+    frame=flange.center_frame(side='same'),
+    holes=[lambda f: Circle.on_frame(workPart, 8.0, f, u=0.0, v=0.0)],  # сквозное отверстие R8 по оси
+)
+merged = Union(workPart, flange, shaft)
+seam = attachment_seam(shaft, merged.body)
+Fillet(workPart, flange, seam, radius=2.0)

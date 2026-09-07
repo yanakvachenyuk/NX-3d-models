@@ -1,4 +1,4 @@
-"""Цикл генерации: prompt → ollama → validate → save."""
+"""Цикл генерации: prompt → ollama/gemini → validate → save."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -9,10 +9,15 @@ from .ollama_client import generate
 from .prompt_build import build_prompt
 from .validate import validate_code
 
-# 3 попытки × 400с таймаут ollama = максимум 1200с внутри одного вызова
+# 3 попытки × 400с таймаут = максимум 1200с внутри одного вызова
 # run_generation. Согласовано с subprocess.run(..., timeout=1400) в new_ui.py —
 # оставляем ~200с запаса на build_prompt/validate/IO.
 DEFAULT_MAX_ATTEMPTS = 3
+
+# Сколько последних успешных турнов диалога подмешивать в промпт при
+# включённом "Отправить в тот же чат". Больше — точнее контекст, но длиннее
+# промпт и дороже/дольше запрос к модели.
+MAX_HISTORY_TURNS = 3
 
 
 def save_prompt_log(prompt: str) -> Path:
@@ -26,6 +31,40 @@ def save_prompt_log(prompt: str) -> Path:
 def save_result(code: str) -> Path:
     OUTPUT_FILE.write_text(RESULT_PREFIX + code, encoding="utf-8")
     return OUTPUT_FILE
+
+
+def _continuation_prompt(base_prompt: str, history: list[dict]) -> str:
+    """
+    Вставляет в промпт контекст предыдущих успешных запросов этой же
+    "сессии" (см. toggle "Отправить в тот же чат" в new_ui.py), чтобы
+    модель рассматривала новый запрос как продолжение/изменение уже
+    построенной модели, а не как отдельную независимую деталь.
+    """
+    turns = history[-MAX_HISTORY_TURNS:]
+    blocks = []
+    for i, turn in enumerate(turns, 1):
+        req = turn.get("request", "")
+        code = turn.get("code", "")
+        blocks.append(
+            f"--- Предыдущий запрос {i} из {len(turns)} (этой же сессии) ---\n"
+            f"Запрос пользователя: {req}\n"
+            "Сгенерированный и успешно выполненный в NX код:\n"
+            "--------------------------------------------------------------------------------\n"
+            f"{code}\n"
+            "--------------------------------------------------------------------------------\n"
+        )
+    history_block = "\n".join(blocks)
+    return (
+        f"{base_prompt}\n\n"
+        "Новый USER REQUEST ниже нужно рассматривать как ПРОДОЛЖЕНИЕ/ИЗМЕНЕНИЕ уже "
+        "построенной модели с точки зрения ЗАМЫСЛА и стиля — используй тот же подход "
+        "к геометрии, что и в предыдущем коде, где это уместно. "
+        "ВАЖНО: 3D-холст сейчас может быть пуст (например, после очистки), поэтому "
+        "КАЖДЫЙ раз генерируй ПОЛНЫЙ самостоятельный код, который заново строит ВСЮ "
+        "геометрию с нуля (включая то, что было в предыдущем коде), а не только новую "
+        "часть — предыдущий код показан только как СПРАВКА о том, что уже было "
+        "сделано, а не как код, который уже выполнен в текущей сессии.\n"
+    )
 
 
 def _retry_prompt(
@@ -57,7 +96,12 @@ def _retry_prompt(
         "выборе формы или паттерна. Требования исходного USER REQUEST "
         "(включая форму детали, тип пристроя и т.д.) остаются в силе без изменений.\n\n"
         "Сгенерируй код заново, полностью, с учётом этой ошибки. "
-        "Помни: только исполняемый Python-код, без ``` и без import/session/workPart.\n"
+        "Помни: только исполняемый Python-код, без ``` и без import/session/workPart.\n" \
+        "Идентичный код, возвращённый повторно без единого изменения,"
+        "ЗАПРЕЩЁН — это означает, что причина ошибки не найдена. Прежде чем"
+        "выдать ответ, явно укажи (в комментарии над изменённой строкой),"
+        "какую именно строку ты изменил и почему, по сравнению с предыдущей"
+        "попыткой."
     )
 
 
@@ -66,16 +110,29 @@ def run_generation(
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     external_error: str | None = None,
     external_previous_code: str | None = None,
+    conversation_history: list[dict] | None = None,
 ) -> Path:
     """
     external_error / external_previous_code — ошибка исполнения в NX и
     код, который её вызвал, из ПРЕДЫДУЩЕГО вызова этой функции (из
     отдельного процесса new_ui.py). Если переданы, учитываются сразу
     в первой же попытке генерации в этом вызове.
+
+    conversation_history — список предыдущих успешных турнов ЭТОЙ ЖЕ
+    "сессии" (см. toggle "Отправить в тот же чат"), вида
+    [{"request": "...", "code": "..."}, ...]. Если передан и непуст,
+    подмешивается в промпт как контекст ДО обработки external_error,
+    так что оба механизма работают одновременно и независимо друг от
+    друга.
     """
     log_lines: list[str] = []
     base_prompt = build_prompt(user_request)
-    save_prompt_log(base_prompt)
+
+    if conversation_history:
+        base_prompt = _continuation_prompt(base_prompt, conversation_history)
+        log_lines.append(
+            f"Учитываю контекст диалога: {len(conversation_history)} предыдущих турна(ов)"
+        )
 
     if external_error:
         current_prompt = _retry_prompt(
@@ -87,6 +144,10 @@ def run_generation(
         log_lines.append(f"Учитываю ошибку предыдущего запуска в NX: {external_error}")
     else:
         current_prompt = base_prompt
+
+    # Лог пишем ПОСЛЕ того, как в base_prompt подмешаны continuation/error —
+    # иначе в сохранённом .txt не видно, что реально ушло модели на 1-ю попытку.
+    save_prompt_log(current_prompt)
 
     last_error = None
     last_code: str | None = None
@@ -119,13 +180,13 @@ def run_generation(
 
 
 def run_console():
-    from .config import LIBRARY_DIR, MODEL, OUTPUT_FILE
+    from .config import LIBRARY_DIR, LLM_PROVIDERS, OUTPUT_FILE
     import requests
 
     print("=" * 80)
     print("NX AI Generator (консоль)")
     print("=" * 80)
-    print(f"Model   : {MODEL}")
+    print(f"Providers: {' -> '.join(LLM_PROVIDERS)}")
     print(f"Library : {LIBRARY_DIR}")
     print(f"Output  : {OUTPUT_FILE}")
     print()

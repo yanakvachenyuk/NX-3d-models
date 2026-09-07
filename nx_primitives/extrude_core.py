@@ -20,6 +20,7 @@ from .edges_helpers import (
     _body_edge_endpoints,
     _get_body_edges_safe,
     _find_body_edge,
+    _find_circular_edges_on_body,
     edges_after_boolean,
 )
 
@@ -68,7 +69,6 @@ def rect_profile(
     lo_v, hi_v = -v0 * width, (1 - v0) * width
     pts = [(lo_u, lo_v), (hi_u, lo_v), (hi_u, hi_v), (lo_u, hi_v)]
     return Polygon.on_frame(workPart, frame, pts)
-
 
 
 class Extrude:
@@ -473,55 +473,25 @@ class Extrude:
         names, _ = self._profile_vertex_names(profile_index)
         return [name + name + "1" for name in names]
 
-    def circular_edge(self, profile_index: int = 0, ring: str = "bottom", tol: float = 1.0):
-        """
-        Круглое ребро (верхнее или нижнее кольцо) экструзии профиля-окружности
-        (Circle). В отличие от многоугольных профилей, у круга нет именованных
-        вершин/рёбер - метод ищет ребро по его РАСПОЛОЖЕНИЮ вдоль оси
-        экструзии, а не по имени.
-
-        profile_index — индекс профиля (Circle) в списке, переданном в Extrude.
-        ring          — "bottom" (плоскость исходного профиля) или "top"
-                        (плоскость профиля, сдвинутая на height вдоль direction).
-        tol           — допуск (мм) при сравнении положения вдоль оси.
-
-        ПРИМЕЧАНИЕ: опирается на edge.SolidEdgeType == NXOpen.Edge.EdgeType.Circular
-        и на edge.GetVertices()[0] как на опорную точку кольца (для замкнутого
-        кругового ребра обычно есть ровно одна вершина - шов). Это не так
-        отработано на практике, как find_edge для многоугольников - если
-        упадёт с неожиданной ошибкой (например AttributeError на
-        SolidEdgeType), пришли точный текст ошибки, поправим.
-        """
+    def circular_edge(self, profile_index=0, ring="bottom", tol=1.0):
         profile = self.profiles[profile_index]
         center = getattr(profile, "center", None)
-        if center is None:
+        radius = getattr(profile, "radius", None)
+        if center is None or radius is None:
             raise ValueError(
                 f"circular_edge(): профиль с индексом {profile_index} не имеет "
-                f"атрибута center (ожидался Circle)."
+                f"атрибутов center/radius (ожидался Circle)."
             )
 
         unit_dir = _unit_vector(self.direction)
         target_h = self.height if ring == "top" else 0.0
 
-        candidates = []
-        for edge in _get_body_edges_safe(self.body):
-            if getattr(edge, "SolidEdgeType", None) != NXOpen.Edge.EdgeType.Circular:
-                continue
-            vs = edge.GetVertices()
-            if not vs:
-                continue
-            p = (vs[0].X, vs[0].Y, vs[0].Z)
-            to_p = _subtract(p, center)
-            proj = sum(a * b for a, b in zip(to_p, unit_dir))
-            if abs(proj - target_h) <= tol:
-                candidates.append(edge)
-
+        candidates = _find_circular_edges_on_body(self.body, center, radius, unit_dir, target_h, tol)
         if not candidates:
             raise ValueError(
                 f"Круглое ребро ({ring}) не найдено для профиля {profile_index} "
-                f"(искали на высоте {target_h} вдоль {self.direction} от {center})."
+                f"(искали на высоте {target_h}, радиус {radius} от центра {center})."
             )
-
         return candidates[0]
 
     def face_from_edges(self, edge_names, profile_index: int = 0):

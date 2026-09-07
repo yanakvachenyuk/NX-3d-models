@@ -1,25 +1,11 @@
 """Пути, модель, префикс result.py."""
 from pathlib import Path
 from datetime import datetime, timedelta
-
-# PROJECT = Path(__file__).resolve().parent.parent
-
-# LIBRARY_DIR = PROJECT / "nx_primitives"
-# PROMPTS_DIR = PROJECT / "prompts"
-# GENERATED_DIR = PROJECT / "generated"
-# LOG_DIR = PROJECT / "logs"
-
-# SYSTEM_BASE = PROMPTS_DIR / "system_base.txt"
-# OUTPUT_FILE = GENERATED_DIR / "result.py"
-
-# OLLAMA_URL = "http://localhost:11434/api/generate"
-# MODEL = "qwen2.5-coder:14b"
-
-# LOG_MAX_AGE_DAYS = 14  # логи старше этого возраста удаляются при каждом запуске
-
-from pathlib import Path
-from datetime import datetime, timedelta
 import os
+
+from dotenv import load_dotenv
+load_dotenv()
+
 PROJECT = Path(__file__).resolve().parent.parent
 
 LIBRARY_DIR = PROJECT / "nx_primitives"
@@ -30,11 +16,19 @@ LOG_DIR = PROJECT / "logs"
 SYSTEM_BASE = PROMPTS_DIR / "system_base.txt"
 OUTPUT_FILE = GENERATED_DIR / "result.py"
 
-# --- Gemini (Google AI Studio) ---
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-MODEL = "gemini-3.6-flash"
+# --- Провайдеры LLM: порядок = порядок fallback при ошибке/лимите/перегрузке ---
+LLM_PROVIDERS = os.environ.get("LLM_PROVIDERS", "gemini,ollama").split(",")
 
-LOG_MAX_AGE_DAYS = 14
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
+
+MISTRAL_API_KEY = os.environ.get("MISTRAL_API_KEY", "")
+MISTRAL_MODEL = os.environ.get("MISTRAL_MODEL", "codestral-latest")
+
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5-coder:14b")
+
+LOG_MAX_AGE_DAYS = 14  # логи старше этого возраста удаляются при каждом запуске
 
 RESULT_PREFIX = f"""import sys
 import os

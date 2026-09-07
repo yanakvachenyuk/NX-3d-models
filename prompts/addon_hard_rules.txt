@@ -6,6 +6,12 @@ Union/Subtract/Intersect, а также перед КАЖДОЙ lambda внут�
 ======================================================================
 1. Не добавляй Union/Subtract/Intersect без явного «объединить» /
    «единое тело» в USER REQUEST.
+   ИСКЛЮЧЕНИЕ: если запрос просит скруглить/сделать фаску «шов»/
+   «переход»/«стык»/«соединение» МЕЖДУ двумя явно названными телами
+   (например «скруглить переход между фланцем и цилиндром») — это
+   САМО ПО СЕБЕ требует Union, даже если слова «объединить» нет.
+   Логика: Fillet шва физически невозможен, если тела не объединены —
+   шва как геометрии не существует у раздельных Extrude.
 2. Не добавляй Fillet без явного «скруглить» / «радиус» / fillet.
 3. Если тело X было передано как tools в Union/Subtract/Intersect
    ВЫШЕ по коду, то ПОСЛЕ этой строки:
@@ -33,21 +39,9 @@ Union/Subtract/Intersect, а также перед КАЖДОЙ lambda внут�
        verticals_a = big_box.vertical_edges()
        verticals_b = small_box.edges_on(merged.body, small_box.vertical_edges())
        Fillet(workPart, big_box, verticals_a + verticals_b, radius=1.0)
-9. Три паттерна присоединения — не смешивать (перевод фраз → см.
-   addon_mapping п.0-4; здесь — сама структура паттерна):
-      ПАТТЕРН A — «плашмя» / НА грани (center_frame):
-        u0=0.5, v0=0.5; смещение по грани — du, dv;
-        шов = attachment_seam(child, merged.body)
-      ПАТТЕРН B — «от ребра» (anchor + attach):
-        v0=0.0; u0=0.0 если «только вперёд/отступ без центрирования»,
-        u0=0.5 если явно «по центру/симметрично»;
-        шов = contact_edges() + edges_on, НЕ attachment_seam
-      attach_plate — стенки/борты во всю длину ребра:
-        width = высота, thickness = толщина, length=None;
-        шов после Union = attach_plate_seam(wall, plate, merged.body,
-                                            side=..., edge_name=...);
-        НЕ merged.new_edges, НЕ attachment_seam;
-        Fillet(workPart, plate, edges, radius=...)
+9. Три паттерна присоединения (A/center_frame, B/anchor, attach_plate) —
+   см. "ГЛАВНАЯ РАЗВИЛКА" в начале промпта. Не смешивать параметры
+   между паттернами (u0/v0/шов у каждого свои).
 10. ГРАНИ МОЖНО АДРЕСОВАТЬ НАПРЯМУЮ. "ab" — это РЕБРО (низ боковой
     грани). "abb1a1" — это ГРАНЬ (вся боковая грань между рёбрами
     "ab" снизу и "a1b1" сверху). anchor()/attach_plate() принимают

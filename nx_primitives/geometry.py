@@ -233,6 +233,17 @@ class Frame:
     def points(self, local_xy):
         return [self.point(u, v) for u, v in local_xy]
 
+    def flipped(self):
+        """
+        Новый Frame с той же origin/u/v, но с normal, развёрнутой на 180°.
+        Используется, когда деталь должна расти НАВСТРЕЧУ обычному
+        направлению нормали (например, прилив внутрь оболочки, а не
+        наружу; ушко вниз с нижней грани и т.п.) — просто передай
+        frame=some_frame.flipped() в attach() вместо ручного
+        direction=tuple(-c for c in frame.normal).
+        """
+        return Frame(self.origin, self.u, self.v, normal=_scale(self.normal, -1.0))
+
 
 def gap_offset(gap: float, size1: float, size2: float = None) -> float:
     """
