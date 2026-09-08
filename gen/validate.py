@@ -1,4 +1,16 @@
-"""Структурная валидация сгенерированного кода (блокирующие ошибки + minimality)."""
+"""Структурная валидация сгенерированного кода (только объективные ошибки API/геометрии).
+
+Проверки семантической "минимальности" (Fillet/Union/holes должны быть в коде
+только если соответствующие слова есть в запросе) сюда намеренно НЕ включены.
+Валидатор видит только последнее сообщение пользователя и весь накопленный
+код — в многошаговом диалоге ("пластина+стенка+скругли шов" -> "добавь бобышку")
+это неизбежно даёт ложные срабатывания на элементах, добавленных в предыдущих
+шагах. Эта проверка уже выполняется моделью внутри одного ответа через блок
+МИНИМАЛЬНОСТЬ в системном промпте, где есть доступ к полному контексту.
+Валидатор оставляет за собой только то, что можно проверить БЕЗ user_request:
+объективные нарушения API и геометрии, которые сломают код в NX независимо
+от того, что именно просил пользователь.
+"""
 from __future__ import annotations
 
 import ast
@@ -324,111 +336,55 @@ def _find_invalid_kwargs(tree: ast.AST, signatures: dict[str, set[str]]) -> list
     return errors
 
 
-_FILLET_TRIGGER_PATTERN = re.compile(
-    r"скругл|fillet|фаск|радиус\w*\s+скругл", re.IGNORECASE
-)
-_BOOLEAN_TRIGGER_WORDS = (
-    "объедин", "единое тело", "слить", "склеить",
-    "вычесть", "вычит", "пересеч", "intersect", "subtract", "boolean",
-)
-_HOLE_TRIGGER_WORDS = ("отверст", "дыр", "паз", "hole", "прорез", "просверл")
+def _find_reused_extrude_base(tree: ast.AST) -> list[str]:
+    """
+    Профиль (2D-контур), переданный как ПЕРВЫЙ элемент списка profiles в
+    Extrude(...), физически "потребляется" NX при построении тела. Повторное
+    использование той же переменной как внешнего контура во ВТОРОМ Extrude(...)
+    не вырежет отверстия (или упадёт) — это структурная ошибка независимо от
+    того, что просил пользователь. В отличие от прежней версии проверки, здесь
+    сверяется КОНКРЕТНАЯ переменная-контур, а не общее число Extrude(...) в
+    коде — так не ловятся ложные срабатывания на двух НЕЗАВИСИМЫХ телах
+    (у каждого свой base), что раньше было частой причиной false positive
+    в многошаговых диалогах, где код успевает накопить несколько тел.
+    """
+    errors: list[str] = []
+    base_call_count: dict[str, int] = {}
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == "Extrude"):
+            continue
+        if len(node.args) < 2 or not isinstance(node.args[1], ast.List):
+            continue
+        elts = node.args[1].elts
+        if not elts or not isinstance(elts[0], ast.Name):
+            continue
+        base_var = elts[0].id
+        base_call_count[base_var] = base_call_count.get(base_var, 0) + 1
 
-
-def _contains_any(text: str, words) -> bool:
-    lowered = text.lower()
-    return any(w in lowered for w in words)
-
-_FILLET_RE = re.compile(r"скругл|fillet|фаск|сглад|радиус\w*\s*скругл", re.I)
-_BOOL_RE = re.compile(r"объедин|единое\s+тело|слить|склеить|вычесть|пересеч", re.I)
-_HOLE_RE = re.compile(r"отверст|дыр|паз|hole|прорез|просверл", re.I)
-
-def _check_minimality(code: str, user_request: str, tree: ast.AST | None = None) -> str | None:
-    if tree is None:
-        tree = ast.parse(code)
-
-    called_funcs = {
-        node.func.id
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-    }
-
-    req = user_request
-    errs = []
-
-    fillet_used = "Fillet" in called_funcs
-    bool_used = bool(called_funcs & {"Union", "Subtract", "Intersect"})
-    holes_used = any(
-        isinstance(kw.value, (ast.List, ast.Call, ast.Name))
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        for kw in node.keywords
-        if kw.arg == "holes"
-    )
-
-    if fillet_used and not _FILLET_RE.search(req):
-        errs.append(
-            "В коде есть Fillet(...), в запросе нет слов про скругление — удали Fillet целиком."
-        )
-
-    seam_words = re.search(r"шов\w*|шв\w*|стык\w*|переход\w*|соединени\w*", req, re.I)
-    if bool_used and not _BOOL_RE.search(req) and not seam_words:
-        errs.append(
-            "В коде есть Union/Subtract/Intersect, в запросе нет объединения — удали."
-        )
-
-    if holes_used and not _HOLE_RE.search(req):
-        errs.append(
-            "В коде есть holes=, в запросе нет отверстия — удали holes=."
-        )
-
-    return " ".join(errs) if errs else None
-
-def _double_extrude_plate_holes(code: str) -> str | None:
-    """Отверстия в пластине: base нельзя скармливать двум Extrude."""
-    if code.count("Extrude(") < 2:
-        return None
-    if "Circle(" not in code or "point_from_center" not in code:
-        return None
-    return (
-        "Отверстия в пластине: только ОДИН Extrude(workPart, [base] + holes). "
-        "Нельзя сначала Extrude([base, hole]/…), потом второй Extrude с holes. "
-        "Удали первый Extrude; все Circle собери в один список holes и один Extrude."
-    )
-
-
-def check_minimality_warnings(code: str, user_request: str) -> list[str]:
-    tree = ast.parse(code)
-    called_funcs = {
-        node.func.id
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-    }
-    holes_used = any(
-        kw.arg == "holes"
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        for kw in node.keywords
-    )
-
-    warnings: list[str] = []
-    if "Fillet" in called_funcs and not _FILLET_TRIGGER_PATTERN.search(user_request):
-        warnings.append(
-            "В коде есть Fillet(...), но в запросе нет слов про скругление. Убери Fillet."
-        )
-    if (called_funcs & {"Union", "Subtract", "Intersect"}) and \
-        not _contains_any(user_request, _BOOLEAN_TRIGGER_WORDS) and \
-        not re.search(r"шов\w*|шв\w*|стык\w*|переход\w*|соединени\w*", user_request, re.I):
-        warnings.append(
-            "В коде есть Union/Subtract/Intersect, но в запросе нет объединения. Убери."
-        )
-    if holes_used and not _contains_any(user_request, _HOLE_TRIGGER_WORDS):
-        warnings.append(
-            "В коде есть holes=[...], но в запросе нет отверстия. Убери holes=."
-        )
-    return warnings
+    for base_var, count in base_call_count.items():
+        if count > 1:
+            errors.append(
+                f"'{base_var}' передан как внешний контур в Extrude(...) {count} раз(а). "
+                f"После первого Extrude контур уже использован — повторный Extrude с тем "
+                f"же '{base_var}' не вырежет отверстия и/или упадёт. Собери ВСЕ профили "
+                f"(внешний контур + все holes) и сделай ОДИН "
+                f"Extrude(workPart, [{base_var}] + holes, ...)."
+            )
+    return errors
 
 
 def validate_code(code: str, user_request: str = "") -> str | None:
+    """
+    user_request принимается только для обратной совместимости вызывающего
+    кода — семантические (minimality) проверки, которые раньше сверяли
+    ключевые слова запроса с составом кода, удалены: они требуют полной
+    истории диалога, которой у валидатора нет, и в многошаговых сценариях
+    (например, "пластина+стенка+скругли шов" -> следующим сообщением
+    "добавь бобышку") давали ложные срабатывания на элементах, добавленных
+    в предыдущих репликах. Эта проверка остаётся на стороне модели
+    (блок МИНИМАЛЬНОСТЬ в системном промпте, где есть весь контекст).
+    """
     try:
         tree = ast.parse(code)
     except SyntaxError as e:
@@ -491,12 +447,8 @@ def validate_code(code: str, user_request: str = "") -> str | None:
                 "Сначала shelf = wall.attach(...), потом Union."
             )
 
-    mini = _check_minimality(code, user_request, tree)
-    if mini:
-        return mini
-
-    err = _double_extrude_plate_holes(code)
-    if err:
-        return err
+    reused_base_errors = _find_reused_extrude_base(tree)
+    if reused_base_errors:
+        return " ".join(reused_base_errors)
 
     return None

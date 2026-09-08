@@ -1561,10 +1561,171 @@ top_contour_edges = edges_in_box(
 Chamfer(workPart, plate, top_contour_edges, setback=1.0)
 
 ================================================================================
+КОНТЕКСТ ПРЕДЫДУЩИХ ЗАПРОСОВ ЭТОЙ ЖЕ СЕССИИ
+================================================================================
+
+--- Предыдущий запрос 1 из 3 (этой же сессии) ---
+Запрос пользователя: ты что с размерами натворил? надо же было 150x100x6 пластину
+Сгенерированный и успешно выполненный в NX код:
+--------------------------------------------------------------------------------
+import sys
+import os
+
+project_path = r'C:\Users\user\Desktop\NX-3d-models'
+
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
+
+import NXOpen
+from nx_primitives import (
+    Triangle,
+    Parallelogram,
+    Polygon,
+    Circle,
+    Line,
+    Extrude,
+    Fillet,
+    Union,
+    Subtract,
+    Intersect,
+    Boolean,
+    Frame,
+    Chamfer,
+    Hide,
+    Shell,
+    rect_profile,
+    attachment_seam,
+    edges_after_boolean,
+    edges_in_box,
+    edges_near,
+    center_hole,
+    holes_in_row,
+    holes_in_circle,
+    attach_plate_seam, 
+    gap_offset
+)
+
+theSession = NXOpen.Session.GetSession()
+workPart = theSession.Parts.Work
+base = Parallelogram(workPart, side_a=150.0, side_b=100.0, angle=90.0)
+plate = Extrude(workPart, [base], height=6.0, direction=(0.0, 0.0, 1.0))
+--------------------------------------------------------------------------------
+
+--- Предыдущий запрос 2 из 3 (этой же сессии) ---
+Запрос пользователя: бля а бобышки куда исчесзли?
+Сгенерированный и успешно выполненный в NX код:
+--------------------------------------------------------------------------------
+import sys
+import os
+
+project_path = r'C:\Users\user\Desktop\NX-3d-models'
+
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
+
+import NXOpen
+from nx_primitives import (
+    Triangle,
+    Parallelogram,
+    Polygon,
+    Circle,
+    Line,
+    Extrude,
+    Fillet,
+    Union,
+    Subtract,
+    Intersect,
+    Boolean,
+    Frame,
+    Chamfer,
+    Hide,
+    Shell,
+    rect_profile,
+    attachment_seam,
+    edges_after_boolean,
+    edges_in_box,
+    edges_near,
+    center_hole,
+    holes_in_row,
+    holes_in_circle,
+    attach_plate_seam, 
+    gap_offset
+)
+
+theSession = NXOpen.Session.GetSession()
+workPart = theSession.Parts.Work
+base = Parallelogram(workPart, side_a=60.0, side_b=60.0, angle=90.0)
+plate = Extrude(workPart, [base], height=3.0, direction=(0.0, 0.0, 1.0))
+boss = plate.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=20.0, u0=0.5, v0=0.5),
+    thickness=3.0,
+    frame=plate.center_frame(side='same'),
+)
+--------------------------------------------------------------------------------
+
+--- Предыдущий запрос 3 из 3 (этой же сессии) ---
+Запрос пользователя: Пластина 120x60x5, стенка на ребре ab высотой 20 мм толщиной 4 мм, и стенка на ребре cd высотой 15 мм толщиной 3 мм. Объединить обе стенки с пластиной, скруглить оба наружных шва радиусом 3 мм.
+Сгенерированный и успешно выполненный в NX код:
+--------------------------------------------------------------------------------
+import sys
+import os
+
+project_path = r'C:\Users\user\Desktop\NX-3d-models'
+
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
+
+import NXOpen
+from nx_primitives import (
+    Triangle,
+    Parallelogram,
+    Polygon,
+    Circle,
+    Line,
+    Extrude,
+    Fillet,
+    Union,
+    Subtract,
+    Intersect,
+    Boolean,
+    Frame,
+    Chamfer,
+    Hide,
+    Shell,
+    rect_profile,
+    attachment_seam,
+    edges_after_boolean,
+    edges_in_box,
+    edges_near,
+    center_hole,
+    holes_in_row,
+    holes_in_circle,
+    attach_plate_seam, 
+    gap_offset
+)
+
+theSession = NXOpen.Session.GetSession()
+workPart = theSession.Parts.Work
+base = Parallelogram(workPart, side_a=120.0, side_b=60.0, angle=90.0)
+plate = Extrude(workPart, [base], height=5.0, direction=(0.0, 0.0, 1.0))
+wall_ab = plate.attach_plate("ab", length=None, width=20.0, thickness=4.0)
+wall_cd = plate.attach_plate("cd", length=None, width=15.0, thickness=3.0)
+merged = Union(workPart, plate, wall_ab, wall_cd)
+edges_ab = attach_plate_seam(wall_ab, plate, merged.body, side='outer', edge_name='ab')
+edges_cd = attach_plate_seam(wall_cd, plate, merged.body, side='outer', edge_name='cd')
+Fillet(workPart, plate, edges_ab, radius=3.0)
+Fillet(workPart, plate, edges_cd, radius=3.0)
+--------------------------------------------------------------------------------
+
+Новый USER REQUEST ниже нужно рассматривать как ПРОДОЛЖЕНИЕ/ИЗМЕНЕНИЕ уже построенной модели с точки зрения ЗАМЫСЛА и стиля — используй тот же подход к геометрии, что и в предыдущем коде, где это уместно. ВАЖНО: 3D-холст сейчас может быть пуст (например, после очистки), поэтому КАЖДЫЙ раз генерируй ПОЛНЫЙ самостоятельный код, который заново строит ВСЮ геометрию с нуля (включая то, что было в предыдущем коде), а не только новую часть — предыдущий код показан только как СПРАВКА о том, что уже было сделано, а не как код, который уже выполнен в текущей сессии.
+
+ОСОБО ВАЖНО про Union/Subtract/Intersect и правило МИНИМАЛЬНОСТИ: правило «нет слова объединить → нет Union» применяется к СМЫСЛУ ВСЕЙ модели, а не только к тексту последнего сообщения. Если в ПРЕДЫДУЩЕМ коде этой сессии уже было Union (тела уже объединены по замыслу пользователя), а новый запрос лишь просит что-то ДОБАВИТЬ или ИЗМЕНИТЬ на этой же объединённой модели (например, скруглить шов, добавить ещё одну деталь и т.п.) — Union НУЖНО сохранить в новом коде, даже если слово «объединить» не повторено в новом запросе. Особый случай: если новый запрос просит скруглить/сделать фаску именно ШВА/ПЕРЕХОДА/СТЫКА между телами — Fillet шва физически невозможен без Union (шва как геометрии не существует у раздельных Extrude), поэтому Union обязателен, и seam-функция (attach_plate_seam/attachment_seam) должна получать merged.body, а НЕ body отдельного Extrude.
+
+================================================================================
 USER REQUEST
 ================================================================================
 
-В каждой бобышке отверстие R2 по центру. Объединить все бобышки с пластиной, скруглить все швы радиусом 1 мм.
+в центре пластины добавь цилиндр R10 высотой 10
 
 ================================================================================
 IMPORTANT

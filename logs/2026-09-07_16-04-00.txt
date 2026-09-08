@@ -1560,12 +1560,24 @@ top_contour_edges = edges_in_box(
 )
 Chamfer(workPart, plate, top_contour_edges, setback=1.0)
 
+--- Пример: полка на свободном крае стенки (attach_plate) ---
+base = Parallelogram(workPart, side_a=80.0, side_b=50.0, angle=90.0)
+plate = Extrude(workPart, [base], height=4.0)
+wall = plate.attach_plate("ab", length=None, width=15.0, thickness=3.0)
+# "cd" - свободное верхнее ребро стенки (не "ab" - это шов с пластиной,
+# и не "a1b1" - та вертикаль по толщине стенки, а не по высоте)
+frame = wall.anchor("cd", t=0.5, angle=0.0)
+shelf = wall.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=10.0, u0=0.0, v0=0.0),
+    thickness=3.0, frame=frame,
+)
+
 ================================================================================
 КОНТЕКСТ ПРЕДЫДУЩИХ ЗАПРОСОВ ЭТОЙ ЖЕ СЕССИИ
 ================================================================================
 
 --- Предыдущий запрос 1 из 1 (этой же сессии) ---
-Запрос пользователя: Пластина 150x100x6, четыре бобышки 15x15x5 мм в ряд на верхней грани с зазором 10 мм между соседними бобышками.
+Запрос пользователя: Пластина 80x50x4, стенка на ребре ab высотой 15 мм толщиной 3 мм. На верхнем ребре этой стенки — полка (пристройка) размером 20x10x3 мм.  Объединить пластину, стенку и полку в единое тело.
 Сгенерированный и успешно выполненный в NX код:
 --------------------------------------------------------------------------------
 import sys
@@ -1607,28 +1619,15 @@ from nx_primitives import (
 
 theSession = NXOpen.Session.GetSession()
 workPart = theSession.Parts.Work
-base = Parallelogram(workPart, side_a=150.0, side_b=100.0, angle=90.0)
-plate = Extrude(workPart, [base], height=6.0)
-# gap = 10 мм, side_a = 150, N=4, w=15 → формула п.8:
-#   gap = (150 - 4*15) / (4+1) = 10
-#   step = 15 + 10 = 25
-#   du_i = -75 + 10 + 7.5 + (i-1)*25,  i = 1..4
-#   du_1 = -75 + 10 + 7.5 = -57.5
-#   du_2 = -57.5 + 25 = -32.5
-#   du_3 = -32.5 + 25 = -7.5
-#   du_4 = -7.5 + 25 = 17.5
-boss_1 = plate.attach(
-    lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
-    thickness=5.0, frame=plate.center_frame(side='same', du=-57.5))
-boss_2 = plate.attach(
-    lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
-    thickness=5.0, frame=plate.center_frame(side='same', du=-32.5))
-boss_3 = plate.attach(
-    lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
-    thickness=5.0, frame=plate.center_frame(side='same', du=-7.5))
-boss_4 = plate.attach(
-    lambda f: rect_profile(workPart, f, length=15.0, width=15.0, u0=0.5, v0=0.5),
-    thickness=5.0, frame=plate.center_frame(side='same', du=17.5))
+base = Parallelogram(workPart, side_a=80.0, side_b=50.0, angle=90.0)
+plate = Extrude(workPart, [base], height=4.0)
+wall = plate.attach_plate("ab", length=None, width=15.0, thickness=3.0)
+frame = wall.anchor("cd", t=0.5, angle=0.0)
+shelf = wall.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=10.0, u0=0.0, v0=0.0),
+    thickness=3.0, frame=frame,
+)
+merged = Union(workPart, plate, wall, shelf)
 --------------------------------------------------------------------------------
 
 Новый USER REQUEST ниже нужно рассматривать как ПРОДОЛЖЕНИЕ/ИЗМЕНЕНИЕ уже построенной модели с точки зрения ЗАМЫСЛА и стиля — используй тот же подход к геометрии, что и в предыдущем коде, где это уместно. ВАЖНО: 3D-холст сейчас может быть пуст (например, после очистки), поэтому КАЖДЫЙ раз генерируй ПОЛНЫЙ самостоятельный код, который заново строит ВСЮ геометрию с нуля (включая то, что было в предыдущем коде), а не только новую часть — предыдущий код показан только как СПРАВКА о том, что уже было сделано, а не как код, который уже выполнен в текущей сессии.
@@ -1639,7 +1638,7 @@ boss_4 = plate.attach(
 USER REQUEST
 ================================================================================
 
-В каждой бобышке отверстие R2 по центру. Объединить все бобышки с пластиной, скруглить все швы радиусом 1 мм.
+Пластина 80x50x4, стенка на ребре ab высотой 15 мм толщиной 3 мм. На верхнем ребре этой стенки — полка (пристройка) размером 20x10x3 мм от начала ребра стенки.  Объединить пластину, стенку и полку в единое тело.
 
 ================================================================================
 IMPORTANT

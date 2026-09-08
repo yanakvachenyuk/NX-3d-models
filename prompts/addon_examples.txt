@@ -372,3 +372,15 @@ top_contour_edges = edges_in_box(
     p_max=(51.0, 16.0, 6.1),
 )
 Chamfer(workPart, plate, top_contour_edges, setback=1.0)
+
+--- Пример: полка на свободном крае стенки (attach_plate) ---
+base = Parallelogram(workPart, side_a=80.0, side_b=50.0, angle=90.0)
+plate = Extrude(workPart, [base], height=4.0)
+wall = plate.attach_plate("ab", length=None, width=15.0, thickness=3.0)
+# "cd" - свободное верхнее ребро стенки (не "ab" - это шов с пластиной,
+# и не "a1b1" - та вертикаль по толщине стенки, а не по высоте)
+frame = wall.anchor("cd", t=0.5, angle=0.0)
+shelf = wall.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=10.0, u0=0.0, v0=0.0),
+    thickness=3.0, frame=frame,
+)

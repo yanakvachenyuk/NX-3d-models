@@ -1564,14 +1564,14 @@ Chamfer(workPart, plate, top_contour_edges, setback=1.0)
 КОНТЕКСТ ПРЕДЫДУЩИХ ЗАПРОСОВ ЭТОЙ ЖЕ СЕССИИ
 ================================================================================
 
---- Предыдущий запрос 1 из 1 (этой же сессии) ---
-Запрос пользователя: Крышка редуктора с ловителем. Брусок 90x70x25, сделать оболочку толщиной 3 мм, открытую снизу. По центру верхней грани — бобышка (ловитель) 25x25x8 мм с отверстием R10 по центру, по углам внутри четыре приливa 8x8x12 мм с отверстием R2 под винты. Скруглить наружные вертикальные рёбра корпуса радиусом 2 мм.
+--- Предыдущий запрос 1 из 3 (этой же сессии) ---
+Запрос пользователя: ок. теперь добавь каждой бобышке отверстие R2 по центру. Объединить все бобышки с пластиной, скруглить все швы радиусом 1 мм.
 Сгенерированный и успешно выполненный в NX код:
 --------------------------------------------------------------------------------
 import sys
 import os
 
-project_path = r'C:\Users\user\Desktop\AI_3D_NX_python_optimization_project'
+project_path = r'C:\Users\user\Desktop\NX-3d-models'
 
 if project_path not in sys.path:
     sys.path.insert(0, project_path)
@@ -1607,30 +1607,147 @@ from nx_primitives import (
 
 theSession = NXOpen.Session.GetSession()
 workPart = theSession.Parts.Work
-base = Parallelogram(workPart, side_a=90.0, side_b=70.0, angle=90.0)
-cover = Extrude(workPart, [base], height=25.0, direction=(0.0, 0.0, 1.0))
-Shell(workPart, cover, faces=[cover.bottom_face()], thickness=3.0)
-# ловитель по центру верхней грани
-catcher = cover.attach(
-    lambda f: rect_profile(workPart, f, length=25.0, width=25.0, u0=0.5, v0=0.5),
-    thickness=8.0,
-    frame=cover.center_frame(side='same'),
-    holes=[lambda f: Circle.on_frame(workPart, 10.0, f, u=0.0, v=0.0)],
+base = Parallelogram(workPart, side_a=150.0, side_b=60.0, angle=90.0)
+plate = Extrude(workPart, [base], height=6.0)
+
+gap = (150.0 - 4*12.0) / (4+1)
+step = 12.0 + gap
+du_1 = -150.0/2 + gap + 12.0/2 + (1-1)*step
+du_2 = -150.0/2 + gap + 12.0/2 + (2-1)*step
+du_3 = -150.0/2 + gap + 12.0/2 + (3-1)*step
+du_4 = -150.0/2 + gap + 12.0/2 + (4-1)*step
+
+boss_1 = plate.attach(
+    lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
+    thickness=4.0, frame=plate.center_frame(side='same', du=du_1),
+    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)]
 )
-# приливы по углам
-dx = 90.0/2 - 8.0/2 - 3.0
-dy = 70.0/2 - 8.0/2 - 3.0
-tabs = [
-    cover.attach(
-        lambda f: rect_profile(workPart, f, length=8.0, width=8.0, u0=0.5, v0=0.5),
-        thickness=12.0,
-        frame=cover.center_frame(side='same', du=du, dv=dv),
-        holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)],
-    )
-    for du, dv in [(-dx, -dy), (dx, -dy), (-dx, dy), (dx, dy)]
-]
-# скругление вертикалей
-Fillet(workPart, cover, cover.vertical_edges(), radius=2.0)
+boss_2 = plate.attach(
+    lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
+    thickness=4.0, frame=plate.center_frame(side='same', du=du_2),
+    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)]
+)
+boss_3 = plate.attach(
+    lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
+    thickness=4.0, frame=plate.center_frame(side='same', du=du_3),
+    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)]
+)
+boss_4 = plate.attach(
+    lambda f: rect_profile(workPart, f, length=12.0, width=12.0, u0=0.5, v0=0.5),
+    thickness=4.0, frame=plate.center_frame(side='same', du=du_4),
+    holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)]
+)
+
+merged = Union(workPart, plate, boss_1, boss_2, boss_3, boss_4)
+
+seam_1 = attachment_seam(boss_1, merged.body)
+seam_2 = attachment_seam(boss_2, merged.body)
+seam_3 = attachment_seam(boss_3, merged.body)
+seam_4 = attachment_seam(boss_4, merged.body)
+
+Fillet(workPart, plate, seam_1, radius=1.0)
+Fillet(workPart, plate, seam_2, radius=1.0)
+Fillet(workPart, plate, seam_3, radius=1.0)
+Fillet(workPart, plate, seam_4, radius=1.0)
+--------------------------------------------------------------------------------
+
+--- Предыдущий запрос 2 из 3 (этой же сессии) ---
+Запрос пользователя: ты что с размерами натворил? надо же было 150x100x6 пластину
+Сгенерированный и успешно выполненный в NX код:
+--------------------------------------------------------------------------------
+import sys
+import os
+
+project_path = r'C:\Users\user\Desktop\NX-3d-models'
+
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
+
+import NXOpen
+from nx_primitives import (
+    Triangle,
+    Parallelogram,
+    Polygon,
+    Circle,
+    Line,
+    Extrude,
+    Fillet,
+    Union,
+    Subtract,
+    Intersect,
+    Boolean,
+    Frame,
+    Chamfer,
+    Hide,
+    Shell,
+    rect_profile,
+    attachment_seam,
+    edges_after_boolean,
+    edges_in_box,
+    edges_near,
+    center_hole,
+    holes_in_row,
+    holes_in_circle,
+    attach_plate_seam, 
+    gap_offset
+)
+
+theSession = NXOpen.Session.GetSession()
+workPart = theSession.Parts.Work
+base = Parallelogram(workPart, side_a=150.0, side_b=100.0, angle=90.0)
+plate = Extrude(workPart, [base], height=6.0, direction=(0.0, 0.0, 1.0))
+--------------------------------------------------------------------------------
+
+--- Предыдущий запрос 3 из 3 (этой же сессии) ---
+Запрос пользователя: бля а бобышки куда исчесзли?
+Сгенерированный и успешно выполненный в NX код:
+--------------------------------------------------------------------------------
+import sys
+import os
+
+project_path = r'C:\Users\user\Desktop\NX-3d-models'
+
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
+
+import NXOpen
+from nx_primitives import (
+    Triangle,
+    Parallelogram,
+    Polygon,
+    Circle,
+    Line,
+    Extrude,
+    Fillet,
+    Union,
+    Subtract,
+    Intersect,
+    Boolean,
+    Frame,
+    Chamfer,
+    Hide,
+    Shell,
+    rect_profile,
+    attachment_seam,
+    edges_after_boolean,
+    edges_in_box,
+    edges_near,
+    center_hole,
+    holes_in_row,
+    holes_in_circle,
+    attach_plate_seam, 
+    gap_offset
+)
+
+theSession = NXOpen.Session.GetSession()
+workPart = theSession.Parts.Work
+base = Parallelogram(workPart, side_a=60.0, side_b=60.0, angle=90.0)
+plate = Extrude(workPart, [base], height=3.0, direction=(0.0, 0.0, 1.0))
+boss = plate.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=20.0, u0=0.5, v0=0.5),
+    thickness=3.0,
+    frame=plate.center_frame(side='same'),
+)
 --------------------------------------------------------------------------------
 
 Новый USER REQUEST ниже нужно рассматривать как ПРОДОЛЖЕНИЕ/ИЗМЕНЕНИЕ уже построенной модели с точки зрения ЗАМЫСЛА и стиля — используй тот же подход к геометрии, что и в предыдущем коде, где это уместно. ВАЖНО: 3D-холст сейчас может быть пуст (например, после очистки), поэтому КАЖДЫЙ раз генерируй ПОЛНЫЙ самостоятельный код, который заново строит ВСЮ геометрию с нуля (включая то, что было в предыдущем коде), а не только новую часть — предыдущий код показан только как СПРАВКА о том, что уже было сделано, а не как код, который уже выполнен в текущей сессии.
@@ -1641,7 +1758,7 @@ Fillet(workPart, cover, cover.vertical_edges(), radius=2.0)
 USER REQUEST
 ================================================================================
 
-4 прилива  должны быть внутри а не снаружи
+Пластина 120x60x5, стенка на ребре ab высотой 20 мм толщиной 4 мм, и стенка на ребре cd высотой 15 мм толщиной 3 мм. Объединить обе стенки с пластиной, скруглить оба наружных шва радиусом 3 мм.
 
 ================================================================================
 IMPORTANT

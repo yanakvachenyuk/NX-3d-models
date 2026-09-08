@@ -1564,14 +1564,14 @@ Chamfer(workPart, plate, top_contour_edges, setback=1.0)
 КОНТЕКСТ ПРЕДЫДУЩИХ ЗАПРОСОВ ЭТОЙ ЖЕ СЕССИИ
 ================================================================================
 
---- Предыдущий запрос 1 из 2 (этой же сессии) ---
-Запрос пользователя: Крышка редуктора с ловителем. Брусок 90x70x25, сделать оболочку толщиной 3 мм, открытую снизу. По центру верхней грани — бобышка (ловитель) 25x25x8 мм с отверстием R10 по центру, по углам внутри четыре приливa 8x8x12 мм с отверстием R2 под винты. Скруглить наружные вертикальные рёбра корпуса радиусом 2 мм.
+--- Предыдущий запрос 1 из 3 (этой же сессии) ---
+Запрос пользователя: ты что с размерами натворил? надо же было 150x100x6 пластину
 Сгенерированный и успешно выполненный в NX код:
 --------------------------------------------------------------------------------
 import sys
 import os
 
-project_path = r'C:\Users\user\Desktop\AI_3D_NX_python_optimization_project'
+project_path = r'C:\Users\user\Desktop\NX-3d-models'
 
 if project_path not in sys.path:
     sys.path.insert(0, project_path)
@@ -1607,40 +1607,18 @@ from nx_primitives import (
 
 theSession = NXOpen.Session.GetSession()
 workPart = theSession.Parts.Work
-base = Parallelogram(workPart, side_a=90.0, side_b=70.0, angle=90.0)
-cover = Extrude(workPart, [base], height=25.0, direction=(0.0, 0.0, 1.0))
-Shell(workPart, cover, faces=[cover.bottom_face()], thickness=3.0)
-# ловитель по центру верхней грани
-catcher = cover.attach(
-    lambda f: rect_profile(workPart, f, length=25.0, width=25.0, u0=0.5, v0=0.5),
-    thickness=8.0,
-    frame=cover.center_frame(side='same'),
-    holes=[lambda f: Circle.on_frame(workPart, 10.0, f, u=0.0, v=0.0)],
-)
-# приливы по углам
-dx = 90.0/2 - 8.0/2 - 3.0
-dy = 70.0/2 - 8.0/2 - 3.0
-tabs = [
-    cover.attach(
-        lambda f: rect_profile(workPart, f, length=8.0, width=8.0, u0=0.5, v0=0.5),
-        thickness=12.0,
-        frame=cover.center_frame(side='same', du=du, dv=dv),
-        holes=[lambda f: Circle.on_frame(workPart, 2.0, f, u=0.0, v=0.0)],
-    )
-    for du, dv in [(-dx, -dy), (dx, -dy), (-dx, dy), (dx, dy)]
-]
-# скругление вертикалей
-Fillet(workPart, cover, cover.vertical_edges(), radius=2.0)
+base = Parallelogram(workPart, side_a=150.0, side_b=100.0, angle=90.0)
+plate = Extrude(workPart, [base], height=6.0, direction=(0.0, 0.0, 1.0))
 --------------------------------------------------------------------------------
 
---- Предыдущий запрос 2 из 2 (этой же сессии) ---
-Запрос пользователя: 4 прилива  должны быть внутри а не снаружи
+--- Предыдущий запрос 2 из 3 (этой же сессии) ---
+Запрос пользователя: бля а бобышки куда исчесзли?
 Сгенерированный и успешно выполненный в NX код:
 --------------------------------------------------------------------------------
 import sys
 import os
 
-project_path = r'C:\Users\user\Desktop\AI_3D_NX_python_optimization_project'
+project_path = r'C:\Users\user\Desktop\NX-3d-models'
 
 if project_path not in sys.path:
     sys.path.insert(0, project_path)
@@ -1676,26 +1654,67 @@ from nx_primitives import (
 
 theSession = NXOpen.Session.GetSession()
 workPart = theSession.Parts.Work
-base = Parallelogram(workPart, side_a=90.0, side_b=70.0, angle=90.0)
-cover = Extrude(workPart, [base], height=25.0, direction=(0.0, 0.0, 1.0))
-Shell(workPart, cover, faces=[cover.bottom_face()], thickness=3.0)
-# ловитель по центру верхней грани
-catcher = cover.attach(
-    lambda f: rect_profile(workPart, f, length=25.0, width=25.0, u0=0.5, v0=0.5),
-    thickness=8.0,
-    frame=cover.center_frame(side='same'),
+base = Parallelogram(workPart, side_a=60.0, side_b=60.0, angle=90.0)
+plate = Extrude(workPart, [base], height=3.0, direction=(0.0, 0.0, 1.0))
+boss = plate.attach(
+    lambda f: rect_profile(workPart, f, length=20.0, width=20.0, u0=0.5, v0=0.5),
+    thickness=3.0,
+    frame=plate.center_frame(side='same'),
 )
-# приливы по углам внутри
-dx = 90.0/2 - 8.0/2 - 3.0
-dy = 70.0/2 - 8.0/2 - 3.0
-tabs = [
-    cover.attach(
-        lambda f: rect_profile(workPart, f, length=8.0, width=8.0, u0=0.5, v0=0.5),
-        thickness=12.0,
-        frame=cover.center_frame(side='same', du=du, dv=dv).flipped(),
-    )
-    for du, dv in [(-dx, -dy), (dx, -dy), (-dx, dy), (dx, dy)]
-]
+--------------------------------------------------------------------------------
+
+--- Предыдущий запрос 3 из 3 (этой же сессии) ---
+Запрос пользователя: Пластина 120x60x5, стенка на ребре ab высотой 20 мм толщиной 4 мм, и стенка на ребре cd высотой 15 мм толщиной 3 мм. Объединить обе стенки с пластиной, скруглить оба наружных шва радиусом 3 мм.
+Сгенерированный и успешно выполненный в NX код:
+--------------------------------------------------------------------------------
+import sys
+import os
+
+project_path = r'C:\Users\user\Desktop\NX-3d-models'
+
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
+
+import NXOpen
+from nx_primitives import (
+    Triangle,
+    Parallelogram,
+    Polygon,
+    Circle,
+    Line,
+    Extrude,
+    Fillet,
+    Union,
+    Subtract,
+    Intersect,
+    Boolean,
+    Frame,
+    Chamfer,
+    Hide,
+    Shell,
+    rect_profile,
+    attachment_seam,
+    edges_after_boolean,
+    edges_in_box,
+    edges_near,
+    center_hole,
+    holes_in_row,
+    holes_in_circle,
+    attach_plate_seam, 
+    gap_offset
+)
+
+theSession = NXOpen.Session.GetSession()
+workPart = theSession.Parts.Work
+base = Parallelogram(workPart, side_a=120.0, side_b=60.0, angle=90.0)
+plate = Extrude(workPart, [base], height=5.0, direction=(0.0, 0.0, 1.0))
+wall_ab = plate.attach_plate("ab", length=None, width=20.0, thickness=4.0)
+wall_cd = plate.attach_plate("cd", length=None, width=15.0, thickness=3.0)
+merged = Union(workPart, plate, wall_ab, wall_cd)
+edges_ab = attach_plate_seam(wall_ab, plate, merged.body, side='outer', edge_name='ab')
+edges_cd = attach_plate_seam(wall_cd, plate, merged.body, side='outer', edge_name='cd')
+Fillet(workPart, plate, edges_ab, radius=3.0)
+Fillet(workPart, plate, edges_cd, radius=3.0)
 --------------------------------------------------------------------------------
 
 Новый USER REQUEST ниже нужно рассматривать как ПРОДОЛЖЕНИЕ/ИЗМЕНЕНИЕ уже построенной модели с точки зрения ЗАМЫСЛА и стиля — используй тот же подход к геометрии, что и в предыдущем коде, где это уместно. ВАЖНО: 3D-холст сейчас может быть пуст (например, после очистки), поэтому КАЖДЫЙ раз генерируй ПОЛНЫЙ самостоятельный код, который заново строит ВСЮ геометрию с нуля (включая то, что было в предыдущем коде), а не только новую часть — предыдущий код показан только как СПРАВКА о том, что уже было сделано, а не как код, который уже выполнен в текущей сессии.
@@ -1706,7 +1725,7 @@ tabs = [
 USER REQUEST
 ================================================================================
 
-отверстия пропали "Крышка редуктора с ловителем. Брусок 90x70x25, сделать оболочку толщиной 3 мм, открытую снизу. По центру верхней грани — бобышка (ловитель) 25x25x8 мм с отверстием R10 по центру, по углам внутри четыре приливa 8x8x12 мм с отверстием R2 под винты. Скруглить наружные вертикальные рёбра корпуса радиусом 2 мм."
+в центре пластины добавь цилиндр R10 высотой 10
 
 ================================================================================
 IMPORTANT
@@ -1717,3 +1736,74 @@ Do NOT use Markdown.
 Do NOT wrap the code with ```.
 The answer must consist ONLY of Python code.
 ================================================================================
+
+================================================================================
+ПРЕДЫДУЩИЙ ОТВЕТ БЫЛ НЕВАЛИДЕН (ошибка выполнения в NX (предыдущий запуск))
+================================================================================
+
+ТВОЙ ПРЕДЫДУЩИЙ (ошибочный) КОД, который нужно починить:
+--------------------------------------------------------------------------------
+import sys
+import os
+
+project_path = r'C:\Users\user\Desktop\NX-3d-models'
+
+if project_path not in sys.path:
+    sys.path.insert(0, project_path)
+
+import NXOpen
+from nx_primitives import (
+    Triangle,
+    Parallelogram,
+    Polygon,
+    Circle,
+    Line,
+    Extrude,
+    Fillet,
+    Union,
+    Subtract,
+    Intersect,
+    Boolean,
+    Frame,
+    Chamfer,
+    Hide,
+    Shell,
+    rect_profile,
+    attachment_seam,
+    edges_after_boolean,
+    edges_in_box,
+    edges_near,
+    center_hole,
+    holes_in_row,
+    holes_in_circle,
+    attach_plate_seam, 
+    gap_offset
+)
+
+theSession = NXOpen.Session.GetSession()
+workPart = theSession.Parts.Work
+base = Parallelogram(workPart, side_a=120.0, side_b=60.0, angle=90.0)
+plate = Extrude(workPart, [base], height=5.0, direction=(0.0, 0.0, 1.0))
+wall_ab = plate.attach_plate("ab", length=None, width=20.0, thickness=4.0)
+wall_cd = plate.attach_plate("cd", length=None, width=15.0, thickness=3.0)
+merged = Union(workPart, plate, wall_ab, wall_cd)
+edges_ab = attach_plate_seam(wall_ab, plate, merged.body, side='outer', edge_name='ab')
+edges_cd = attach_plate_seam(wall_cd, plate, merged.body, side='outer', edge_name='cd')
+Fillet(workPart, plate, edges_ab, radius=3.0)
+Fillet(workPart, plate, edges_cd, radius=3.0)
+cyl = plate.attach(
+    lambda f: Circle.on_frame(workPart, 10.0, f, u=0.0, v=0.0),
+    thickness=10.0,
+    frame=plate.center_frame(side='same'),
+)
+merged = Union(workPart, plate, wall_ab, wall_cd, cyl)
+seam = attachment_seam(cyl, merged.body)
+Fillet(workPart, plate, seam, radius=3.0)
+--------------------------------------------------------------------------------
+
+Ошибка: NXException: Операция, запрещенная на подавленном объекте
+
+ВАЖНО: почини именно ЭТУ ошибку в СВОЁМ предыдущем коде, минимально его изменив. НЕ заменяй геометрическую фигуру, паттерн присоединения или общий подход на другой (например, Parallelogram вместо Triangle, или center_frame вместо anchor), если это не было причиной ошибки — источник ошибки почти всегда в одном конкретном вызове API, а не в выборе формы или паттерна. Требования исходного USER REQUEST (включая форму детали, тип пристроя и т.д.) остаются в силе без изменений.
+
+Сгенерируй код заново, полностью, с учётом этой ошибки. Помни: только исполняемый Python-код, без ``` и без import/session/workPart.
+Идентичный код, возвращённый повторно без единого изменения,ЗАПРЕЩЁН — это означает, что причина ошибки не найдена. Прежде чемвыдать ответ, явно укажи (в комментарии над изменённой строкой),какую именно строку ты изменил и почему, по сравнению с предыдущейпопыткой.
